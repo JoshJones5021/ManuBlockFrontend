@@ -7,6 +7,7 @@ const Register = () => {
         username: '',
         email: '',
         password: '',
+        role: 'CUSTOMER'
     });
 
     const [error, setError] = useState('');
@@ -68,7 +69,8 @@ const Register = () => {
             const response = await registerUser({
                 email: userData.email.trim(),
                 password: userData.password.trim(),
-                username: userData.username.trim()
+                username: userData.username.trim(),
+                role: userData.role
             });
             setMessage('Registration successful! Redirecting...');
             setTimeout(() => {
@@ -124,8 +126,8 @@ const Register = () => {
                         required
                         className="w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
-                    <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">
-                    Submit
+                    <button type="submit" className="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600">
+                        Register
                     </button>
                 </form>
                 {error && <p className="text-red-500 text-center mt-4">{error}</p>}
