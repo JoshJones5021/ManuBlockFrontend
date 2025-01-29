@@ -30,3 +30,32 @@ export const createSupplyChain = async (supplyChain) => {
         throw error;
     }
 };
+
+export const getSupplyChainById = async (id) => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/${id}`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching supply chain:", error);
+        throw error;
+    }
+};
+
+export const updateSupplyChain = async (id, updatedSupplyChain) => {
+    try {
+        const response = await axios.put(`${API_BASE_URL}/${id}`, updatedSupplyChain, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+                "Content-Type": "application/json",
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error updating supply chain ${id}:`, error.response?.data || error.message);
+        throw error;
+    }
+};

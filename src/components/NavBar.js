@@ -57,7 +57,7 @@ const Navbar = () => {
                 {/* Wallet Address */}
                 {walletAddress && (
                     <span className="bg-gray-800 text-white px-3 py-1 rounded-md">
-                        {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                        {walletAddress}
                     </span>
                 )}
                 {/* Logout Button */}
