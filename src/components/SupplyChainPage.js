@@ -17,6 +17,10 @@ const SupplyChainPage = () => {
     const [supplyChain, setSupplyChain] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [editingNodes, setEditingNodes] = useState({});
+    const [validationError, setValidationError] = useState('');
+    const [users, setUsers] = useState([]);  
+    const [roles, setRoles] = useState([]);  
 
     // React Flow State
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -28,48 +32,85 @@ const SupplyChainPage = () => {
 
     // Fetch supply chain data
     useEffect(() => {
-        const fetchSupplyChain = async () => {
-            try {
-                const data = await getSupplyChainById(id);
-                setSupplyChain(data);
-        
-                if (data.nodes) {
-                    setNodes(data.nodes.map((node, index) => ({
-                        id: `${index + 1}`, // ✅ Ensure ID consistency
-                        type: "customNode",
-                        position: { x: node.x ?? 100, y: node.y ?? 100 },
-                        data: {
-                            id: `${index + 1}`,
-                            label: node.type || "Unnamed",
-                            name: node.name || "Unnamed Node",
-                            role: node.role || "Unassigned",
-                            assignedUser: node.assignedUser || "Unassigned",
-                            isEditMode,
-                            onDelete: handleDeleteNode,
-                            onEdit: handleEditNode,
-                        }
-                    })));
-                }
-        
-                if (data.edges) {
-                    setEdges(data.edges.map((edge) => ({
-                        id: `${edge.id}`, // ✅ Ensure ID is a string
-                        source: `${edge.source}`, // ✅ Ensure consistency with node IDs
-                        target: `${edge.target}`,
-                        sourceHandle: edge.sourceHandle || "right", // ✅ Assign default source handle
-                        targetHandle: edge.targetHandle || "left",  // ✅ Assign default target handle
-                        animated: edge.animated ?? true,
-                        style: { stroke: edge.strokeColor || "#778DA9", strokeWidth: edge.strokeWidth ?? 2 }
-                    })));
-                }
-            } catch (err) {
-                console.error("❌ Error fetching supply chain:", err);
-            } finally {
-                setLoading(false);
+    const fetchSupplyChainAndUsers = async () => {
+        try {
+            console.log("⏳ Fetching supply chain and users...");
+    
+            // ✅ Fetch Supply Chain Data
+            const data = await getSupplyChainById(id);
+            if (!data) {
+                console.error("❌ Error: Supply chain is null or undefined!");
+                return;
             }
-        };        
-        fetchSupplyChain();
-    }, [id, isEditMode]);
+            console.log("✅ Fetched Supply Chain:", data);
+            setSupplyChain(data);
+    
+            if (data.nodes) {
+                setNodes(data.nodes.map((node, index) => ({
+                    id: `${index + 1}`,
+                    type: "customNode",
+                    position: { x: node.x ?? 100, y: node.y ?? 100 },
+                    data: {
+                        id: `${index + 1}`,
+                        label: node.type || "Unnamed",
+                        name: node.name || "Unnamed Node",
+                        role: node.role || "Unassigned",
+                        assignedUser: node.assignedUser || "Unassigned",
+                        isEditMode,
+                        onDelete: handleDeleteNode,
+                        onEdit: handleEditNode,
+                    }
+                })));
+            }
+    
+            if (data.edges) {
+                setEdges(data.edges.map((edge) => ({
+                    id: `${edge.id}`,
+                    source: `${edge.source}`,
+                    target: `${edge.target}`,
+                    sourceHandle: edge.sourceHandle || "right",
+                    targetHandle: edge.targetHandle || "left",
+                    animated: edge.animated ?? true,
+                    style: { stroke: edge.strokeColor || "#778DA9", strokeWidth: edge.strokeWidth ?? 2 }
+                })));
+            }
+    
+            // ✅ Fetch Users and Roles with Auth Header
+            console.log("⏳ Fetching Users and Roles...");
+            const authToken = localStorage.getItem("token"); // Ensure user is logged in
+
+            const headers = {
+                "Authorization": `Bearer ${authToken}`,
+                "Content-Type": "application/json"
+            };
+
+            const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
+            const rolesResponse = await fetch("http://localhost:8080/api/users/roles", { headers });
+
+            if (!usersResponse.ok || !rolesResponse.ok) {
+                throw new Error("Failed to fetch users or roles");
+            }
+
+            const usersData = await usersResponse.json();
+            const rolesData = await rolesResponse.json();
+
+            console.log("✅ Fetched Users:", usersData);
+            console.log("✅ Fetched Roles:", rolesData);
+
+            setUsers(usersData || []);  // ✅ Ensure no undefined errors
+            setRoles(rolesData || []);  // ✅ Ensure no undefined errors
+
+        } catch (err) {
+            console.error("❌ Error fetching supply chain or users/roles:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchSupplyChainAndUsers();
+}, [id]);  // ✅ Removed `isEditMode` dependency
+
+       
 
     // Handle Node Drop
     const onDrop = (event) => {
@@ -104,26 +145,34 @@ const SupplyChainPage = () => {
 
     // Handle Modal Save
     const handleSaveNode = () => {
+        if (!selectedNode.data.name || !selectedNode.data.role || !selectedNode.data.assignedUser) {
+            setValidationError('All fields must be filled.');
+            return;
+        }
+    
         setNodes((nds) =>
             nds.map((node) =>
                 node.id === selectedNode.id ? { ...node, data: selectedNode.data } : node
             )
         );
         setIsModalOpen(false);
+        setEditingNodes(prev => ({ ...prev, [selectedNode.id]: false })); // Set to false when node is saved
+        setValidationError(''); // Clear validation error
     };
 
     // Handle Node Deletion
     const handleDeleteNode = (nodeId, event) => {
-        event.stopPropagation(); // ✅ Prevent modal from opening
+        if (event) event.stopPropagation(); // ✅ Prevents parent handlers from running
         setNodes((nds) => nds.filter((node) => node.id !== nodeId));
         setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-    };    
+    };     
 
     // Handle Node Edit
     const handleEditNode = (nodeId) => {
         const nodeToEdit = nodes.find(node => node.id === nodeId);
         setSelectedNode(nodeToEdit);
         setIsModalOpen(true);
+        setEditingNodes(prev => ({ ...prev, [nodeId]: true })); // Set to true when node is being edited
     };
 
     // Handle Node Connections
@@ -156,33 +205,51 @@ const SupplyChainPage = () => {
     // Save Supply Chain
     const handleSaveSupplyChain = async () => {
         try {
+            const nodeIdMap = {};
+
+            supplyChain.nodes.forEach((node, index) => {
+                nodeIdMap[nodes[index]?.id] = node.id || null; // Map frontend IDs to backend IDs
+            });
+
+            let maxEdgeId = Math.max(...edges.map(e => Number(e.id) || 0), 0); // Ensure max ID is a number
+
+            const updatedEdges = edges.map(edge => ({
+                id: edge.id && edge.id !== "null" ? Number(edge.id) : ++maxEdgeId,  // Ensure ID is a valid long number
+                source: edge.source,
+                target: edge.target,
+                sourceHandle: edge.sourceHandle || "right",
+                targetHandle: edge.targetHandle || "left",
+                supply_chain_id: supplyChain.id,
+                animated: false,
+                strokeColor: "#778DA9",
+                strokeWidth: 2
+            }));      
+
             const updatedSupplyChain = {
-                ...supplyChain,
+                id: supplyChain.id,
+                name: supplyChain.name,
+                description: supplyChain.description,
                 nodes: nodes.map(node => ({
-                    x: node.position.x || 100,
-                    y: node.position.y || 100,
-                    type: node.data.label || "Unnamed",
+                    id: node.id && !isNaN(Number(node.id)) ? Number(node.id) : null, // ✅ Convert to number
+                    x: node.position.x,
+                    y: node.position.y,
+                    type: "customNode",
                     name: node.data.name || "Unnamed Node",
                     role: node.data.role || "Unassigned",
                     assignedUser: node.data.assignedUser || "Unassigned"
                 })),
-                edges: edges.map(edge => ({
-                    id: edge.id, 
-                    source: edge.source,
-                    target: edge.target,
-                    sourceHandle: edge.sourceHandle || "right", // ✅ Ensure correct handle
-                    targetHandle: edge.targetHandle || "left", // ✅ Ensure correct handle
-                    animated: edge.animated ?? true,
-                    strokeColor: edge.style?.stroke || "#778DA9",
-                    strokeWidth: edge.style?.strokeWidth ?? 2
-                }))                
+                edges: updatedEdges
             };
 
+            console.log("📤 Saving updated supply chain:", JSON.stringify(updatedSupplyChain, null, 2));
+
             await updateSupplyChain(id, updatedSupplyChain);
+
+            setEdges(updatedEdges);
             setIsEditMode(false);
             alert("Supply Chain saved successfully!");
         } catch (error) {
-            console.error("Error saving supply chain:", error);
+            console.error("❌ Error saving supply chain:", error);
         }
     };
 
@@ -207,7 +274,8 @@ const SupplyChainPage = () => {
                         onClick={() => isEditMode ? handleSaveSupplyChain() : setIsEditMode(true)}
                         className={`px-4 py-2 rounded transition ${
                             isEditMode ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"
-                        }`}
+                        } ${Object.values(editingNodes).some(isEditing => isEditing) ? "opacity-50 cursor-not-allowed" : ""}`} // Add faded effect and disable cursor when disabled
+                        disabled={Object.values(editingNodes).some(isEditing => isEditing)} // Disable button when any node is being edited
                     >
                         {isEditMode ? "Save & Exit Edit Mode" : "Enter Edit Mode"}
                     </button>
@@ -243,20 +311,36 @@ const SupplyChainPage = () => {
                                 type: "customNode",
                                 data: {
                                     ...node.data,
-                                    isEditMode, // ✅ Pass edit mode flag
+                                    isEditMode,
+                                    users, // ✅ Pass users
+                                    roles, // ✅ Pass roles
                                     onDelete: (nodeId, event) => handleDeleteNode(nodeId, event),
                                     onEdit: handleEditNode,
+                                    updateNodeData: (nodeId, field, value) => {
+                                        setNodes((prevNodes) =>
+                                            prevNodes.map((n) =>
+                                                n.id === nodeId ? { ...n, data: { ...n.data, [field]: value } } : n
+                                            )
+                                        );
+                                    },
+                                    onEditStateChange: (nodeId, isEditing) => {
+                                        setEditingNodes(prev => ({ ...prev, [nodeId]: isEditing }));
+                                    }
                                 }
                             }))}
-                            edges={edges.map(edge => ({
-                                ...edge,
-                                animated: isEditMode, // ✅ Animates in edit mode
-                                style: {
+                            edges={edges
+                                .filter(edge => nodes.find(node => node.id === edge.source) && nodes.find(node => node.id === edge.target)) // ✅ Ensure edges reference existing nodes
+                                .map(edge => ({
+                                  ...edge,
+                                  animated: isEditMode, // ✅ Animate only in edit mode
+                                  deletable: isEditMode, // ✅ Prevent deletion outside edit mode
+                                  selectable: isEditMode, // ✅ Ensure edges can't be selected outside edit mode
+                                  style: {
                                     stroke: "#778DA9",
                                     strokeWidth: 2,
-                                    opacity: 1, // ✅ Ensure visibility
-                                }
-                            }))}                                                                                   
+                                    opacity: 1, // ✅ Ensure edges remain visible outside edit mode
+                                  }
+                                }))}                                                                                                                                           
                             onNodesChange={isEditMode ? onNodesChange : undefined}
                             onEdgesChange={isEditMode ? onEdgesChange : undefined}
                             onConnect={isEditMode ? onConnect : undefined}
