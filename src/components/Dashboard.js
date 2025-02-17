@@ -4,7 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import Navbar from './NavBar';
 import Sidebar from './Sidebar';
 import Pagination from './Pagination';
-import { getAllSupplyChains, createSupplyChain } from '../services/supplyChainApi'; // Import API functions
+import { getAllSupplyChains, createSupplyChain, deleteSupplyChain } from '../services/supplyChainApi'; // Import API functions
 
 const Dashboard = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -94,6 +94,21 @@ const Dashboard = () => {
         }
     };
 
+    const handleDeleteSupplyChain = async (id) => {
+        try {
+            await deleteSupplyChain(id);
+            setSupplyChains(supplyChains.filter(chain => chain.id !== id));
+            setFilteredChains(filteredChains.filter(chain => chain.id !== id));
+        } catch (error) {
+            console.error('Error deleting supply chain:', error);
+        }
+    };
+
+    const formatDateTime = (dateTime) => {
+        const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+        return new Date(dateTime).toLocaleDateString(undefined, options);
+    };
+
     return (
         <div className="flex h-screen bg-[#0D1B2A] text-[#E0E1DD]">
             <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
@@ -111,7 +126,7 @@ const Dashboard = () => {
                     </div>
 
                     <div className="flex justify-between items-center mb-6">
-                    <button
+                        <button
                             onClick={handleOpenModal}
                             className="bg-[#415A77] text-white py-2 px-4 rounded hover:bg-[#778DA9] transition duration-300"
                         >
@@ -154,10 +169,18 @@ const Dashboard = () => {
                         {selectedSupplyChains.map((chain) => (
                             <div
                                 key={chain.id}
-                                className="bg-[#1B263B] p-6 rounded-lg shadow-md border border-[#415A77] hover:shadow-lg transition duration-300"
+                                className="bg-[#1B263B] p-6 rounded-lg shadow-md border border-[#415A77] hover:shadow-lg transition duration-300 relative"
                             >
+                                <button
+                                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-md flex items-center justify-center shadow-md transition"
+                                    onClick={() => handleDeleteSupplyChain(chain.id)}
+                                >
+                                    ✖
+                                </button>
                                 <h2 className="text-xl font-semibold text-[#E0E1DD]">{chain.name}</h2>
                                 <p className="text-[#778DA9] mt-2">{chain.description}</p>
+                                <p className="text-[#778DA9] mt-2 text-xs">Created: {formatDateTime(chain.createdAt)}</p>
+                                <p className="text-[#778DA9] mt-1 text-xs">Updated: {formatDateTime(chain.updatedAt)}</p>
                                 <button
                                     onClick={() => navigate(`/supply-chain/${chain.id}`)}
                                     className="mt-4 bg-[#415A77] text-white py-2 px-4 rounded hover:bg-[#778DA9] transition duration-300"

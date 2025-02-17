@@ -206,13 +206,13 @@ const SupplyChainPage = () => {
     const handleSaveSupplyChain = async () => {
         try {
             const nodeIdMap = {};
-
+    
             supplyChain.nodes.forEach((node, index) => {
                 nodeIdMap[nodes[index]?.id] = node.id || null; // Map frontend IDs to backend IDs
             });
-
+    
             let maxEdgeId = Math.max(...edges.map(e => Number(e.id) || 0), 0); // Ensure max ID is a number
-
+    
             const updatedEdges = edges.map(edge => ({
                 id: edge.id && edge.id !== "null" ? Number(edge.id) : ++maxEdgeId,  // Ensure ID is a valid long number
                 source: edge.source,
@@ -224,7 +224,7 @@ const SupplyChainPage = () => {
                 strokeColor: "#778DA9",
                 strokeWidth: 2
             }));      
-
+    
             const updatedSupplyChain = {
                 id: supplyChain.id,
                 name: supplyChain.name,
@@ -240,11 +240,11 @@ const SupplyChainPage = () => {
                 })),
                 edges: updatedEdges
             };
-
+    
             console.log("📤 Saving updated supply chain:", JSON.stringify(updatedSupplyChain, null, 2));
-
+    
             await updateSupplyChain(id, updatedSupplyChain);
-
+    
             setEdges(updatedEdges);
             setIsEditMode(false);
             alert("Supply Chain saved successfully!");

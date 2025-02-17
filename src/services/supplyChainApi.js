@@ -18,7 +18,10 @@ export const getAllSupplyChains = async () => {
 
 export const createSupplyChain = async (supplyChain) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/create`, supplyChain, {
+        const response = await axios.post(`${API_BASE_URL}/create`, {
+            ...supplyChain,
+            createdAt: new Date().toISOString(), // Add createdAt date
+        }, {
             headers: {
                 Authorization: `Bearer ${localStorage.getItem('token')}`,
                 'Content-Type': 'application/json',
@@ -47,7 +50,10 @@ export const getSupplyChainById = async (id) => {
 
 export const updateSupplyChain = async (id, updatedSupplyChain) => {
     try {
-        const response = await axios.put(`${API_BASE_URL}/${id}`, updatedSupplyChain, {
+        const response = await axios.put(`${API_BASE_URL}/${id}`, {
+            ...updatedSupplyChain,
+            updatedAt: new Date().toISOString(), // Add updatedAt date
+        }, {
             headers: {
                 Authorization: `Bearer ${localStorage.getItem("token")}`,
                 "Content-Type": "application/json",
@@ -56,6 +62,20 @@ export const updateSupplyChain = async (id, updatedSupplyChain) => {
         return response.data;
     } catch (error) {
         console.error(`Error updating supply chain ${id}:`, error.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const deleteSupplyChain = async (id) => {
+    try {
+        const response = await axios.delete(`${API_BASE_URL}/${id}`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error deleting supply chain ${id}:`, error.response?.data || error.message);
         throw error;
     }
 };
