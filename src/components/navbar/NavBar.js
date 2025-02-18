@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { logoutUser } from '../services/api';
+import { logoutUser } from '../../services/api';
 import blockies from 'ethereum-blockies';
 
 const Navbar = () => {

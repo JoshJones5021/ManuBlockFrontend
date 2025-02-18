@@ -3,15 +3,15 @@ import { useParams } from "react-router-dom";
 import { getSupplyChainById, updateSupplyChain } from "../services/supplyChainApi";
 import ReactFlow, { MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge } from "reactflow";
 import "reactflow/dist/style.css";
-import Navbar from "./NavBar";
-import Sidebar from "./Sidebar";
-import CustomNode from "./CustomNode"; // Import the custom node component
+import Navbar from "../components/navbar/NavBar";
+import Sidebar from "../components/sidebar/Sidebar";
+import CustomNode from '../nodes/CustomNode';
 
 const nodeTypes = {
     customNode: CustomNode, // Ensure CustomNode is used directly
 };
 
-const SupplyChainPage = () => {
+const SupplyChain = () => {
     const { id } = useParams();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [supplyChain, setSupplyChain] = useState(null);
@@ -401,4 +401,4 @@ const SupplyChainPage = () => {
     );
 };
 
-export default SupplyChainPage;
+export default SupplyChain;

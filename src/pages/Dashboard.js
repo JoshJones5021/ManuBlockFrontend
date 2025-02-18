@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
-import Navbar from './NavBar';
-import Sidebar from './Sidebar';
-import Pagination from './Pagination';
+import Navbar from '../components/navbar/NavBar';
+import Sidebar from '../components/sidebar/Sidebar';
+import Pagination from '../components/Pagination';
 import { getAllSupplyChains, createSupplyChain, deleteSupplyChain } from '../services/supplyChainApi'; // Import API functions
 
 const Dashboard = () => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createSupplyChain } from '../services/supplyChainApi';
+import { createSupplyChain } from '../../services/supplyChainApi';
 
 const CreateSupplyChainModal = ({ isOpen, onClose, onRefresh }) => {
     const [name, setName] = useState('');

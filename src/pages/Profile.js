@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './NavBar';
-import Sidebar from './Sidebar';
+import Navbar from '../components/navbar/NavBar';
+import Sidebar from '../components/sidebar/Sidebar';
 import Web3 from 'web3';
 import blockies from 'ethereum-blockies';
 

@@ -1,9 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './components/Dashboard';
-import Login from './components/Login';
-import Register from './components/Register';
-import Profile from './components/Profile';
-import SupplyChainPage from './components/SupplyChainPage';
+import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Profile from './pages/Profile';
+import SupplyChain from './pages/SupplyChain';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -25,7 +25,7 @@ function App() {
                 } />
                 <Route path="/supply-chain/:id" element={
                     <ProtectedRoute>
-                      <SupplyChainPage />
+                      <SupplyChain />
                     </ProtectedRoute>
                 } />
             </Routes>

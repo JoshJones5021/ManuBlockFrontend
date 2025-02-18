@@ -1,8 +1,8 @@
 import React from 'react';
-import manublock from '../assets/manublock.png';
-import dashboardIcon from '../assets/dashboard.png';
-import accountIcon from '../assets/account.png';
-import settingsIcon from '../assets/settings.png';
+import manublock from '../../assets/manublock.png';
+import dashboardIcon from '../../assets/dashboard.png';
+import accountIcon from '../../assets/account.png';
+import settingsIcon from '../../assets/settings.png';
 import { Link } from 'react-router-dom';
 
 const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
