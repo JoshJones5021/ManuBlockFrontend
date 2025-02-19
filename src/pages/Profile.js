@@ -13,21 +13,39 @@ const Profile = () => {
         walletAddress: '',
     });
     const [profileImage, setProfileImage] = useState(null);
+    const [isEditingEmail, setIsEditingEmail] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
 
     useEffect(() => {
-        // Fetch user details and wallet address from localStorage
-        const storedUser = {
-            username: localStorage.getItem('username') || 'N/A',
-            email: localStorage.getItem('email') || 'N/A',
-            role: localStorage.getItem('role') || 'N/A',
-            walletAddress: localStorage.getItem('walletAddress') || '',
-        };
-        setUser(storedUser);
+        // Fetch user details from the backend
+        const fetchUserDetails = async () => {
+            const userId = localStorage.getItem('userId');
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`http://localhost:8080/api/users/${userId}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+                const userData = await response.json();
+                setUser({
+                    username: userData.username,
+                    email: userData.email,
+                    role: userData.role,
+                    walletAddress: userData.walletAddress || '',
+                });
+                setNewEmail(userData.email);
 
-        // Generate Blockies identicon only if wallet address exists
-        if (storedUser.walletAddress) {
-            generateProfileImage(storedUser.walletAddress);
-        }
+                // Generate Blockies identicon only if wallet address exists
+                if (userData.walletAddress) {
+                    generateProfileImage(userData.walletAddress);
+                }
+            } catch (error) {
+                console.error('Error fetching user details:', error);
+            }
+        };
+
+        fetchUserDetails();
     }, []);
 
     const generateProfileImage = (walletAddress) => {
@@ -112,6 +130,35 @@ const Profile = () => {
         }
     };
 
+    const handleEmailChange = (e) => {
+        setNewEmail(e.target.value);
+    };
+
+    const handleSaveEmail = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const userId = localStorage.getItem('userId');
+
+            const response = await fetch(`http://localhost:8080/api/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ email: newEmail }),
+            });
+
+            if (response.ok) {
+                setUser((prev) => ({ ...prev, email: newEmail }));
+                setIsEditingEmail(false);
+            } else {
+                console.error('Failed to update email');
+            }
+        } catch (error) {
+            console.error('Error updating email:', error);
+        }
+    };
+
     return (
         <div className="flex h-screen bg-gray-900 text-white">
             <Sidebar isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
@@ -134,10 +181,28 @@ const Profile = () => {
                                 <label className="block text-sm">Email Address</label>
                                 <input
                                     type="email"
-                                    value={user.email}
-                                    className="w-full p-2 rounded bg-gray-600 border border-gray-500"
-                                    disabled
+                                    value={newEmail}
+                                    onChange={handleEmailChange}
+                                    className={`w-full p-2 rounded border border-gray-500 ${
+                                        isEditingEmail ? 'bg-gray-600' : 'bg-gray-500 cursor-not-allowed'
+                                    }`}
+                                    disabled={!isEditingEmail}
                                 />
+                                {isEditingEmail ? (
+                                    <button
+                                        onClick={handleSaveEmail}
+                                        className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300 mt-2"
+                                    >
+                                        Save Email
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setIsEditingEmail(true)}
+                                        className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300 mt-2"
+                                    >
+                                        Change Email
+                                    </button>
+                                )}
                             </div>
                         </div>
 
