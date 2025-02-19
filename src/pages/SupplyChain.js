@@ -83,7 +83,7 @@ const SupplyChain = () => {
                         position: { x: node.x ?? 100, y: node.y ?? 100 },
                         data: {
                             id: `${index + 1}`,
-                            label: node.type || "Unnamed",
+                            label: node.name || "Unnamed Node", // Set label to node name
                             name: node.name || "Unnamed Node",
                             role: node.role || "Unassigned",
                             assignedUser: node.assignedUser || "Unassigned",
@@ -116,8 +116,6 @@ const SupplyChain = () => {
     
         fetchSupplyChainAndUsers();
     }, [id]);
-
-       
 
     // Handle Node Drop
     const onDrop = (event) => {

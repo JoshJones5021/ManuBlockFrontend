@@ -47,7 +47,9 @@ const CustomNode = ({ data }) => {
 
     // Function to handle name change
     const handleNameChange = (e) => {
-        data.updateNodeData(data.id, "name", e.target.value);
+        const newName = e.target.value;
+        data.updateNodeData(data.id, "name", newName);
+        data.updateNodeData(data.id, "label", newName); // Update the label as well
         validateFields(); // Validate fields after name change
     };
 
@@ -116,21 +118,18 @@ const CustomNode = ({ data }) => {
 
             {/* Node Content */}
             <div className="p-2 text-left bg-[#1B263B] text-gray-300 text-sm rounded-b-lg">
-                <div className="py-1 border-b border-[#415A77]">
-                    <strong>Name:</strong> {isEditing ? (
-                        <>
-                            <input
-                                type="text"
-                                value={data.name}
-                                onChange={handleNameChange}
-                                className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
-                            />
-                            {validationErrors.name && <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>}
-                        </>
-                    ) : (
-                        <span>{data.name}</span>
-                    )}
-                </div>
+                {isEditing && (
+                    <div className="py-1 border-b border-[#415A77]">
+                        <strong>Name:</strong>
+                        <input
+                            type="text"
+                            value={data.name}
+                            onChange={handleNameChange}
+                            className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
+                        />
+                        {validationErrors.name && <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>}
+                    </div>
+                )}
 
                 {/* Role Dropdown */}
                 <div className="py-1 border-b border-[#415A77]">
