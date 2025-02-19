@@ -18,6 +18,7 @@ export const getAllSupplyChains = async () => {
 
 export const createSupplyChain = async (supplyChain) => {
     try {
+        console.log("Creating supply chain with data:", supplyChain); // Log the request payload
         const response = await axios.post(`${API_BASE_URL}/create`, {
             ...supplyChain,
             createdAt: new Date().toISOString(), // Add createdAt date

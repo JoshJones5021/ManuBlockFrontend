@@ -13,6 +13,7 @@ const Dashboard = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [filteredChains, setFilteredChains] = useState([]);
+    const [userIdToUsername, setUserIdToUsername] = useState({}); // Map user IDs to usernames
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,19 +23,39 @@ const Dashboard = () => {
     const [user, setUser] = useState({ username: '', role: '' });
     const navigate = useNavigate();
 
-    // Fetch supply chains on load
+    // Fetch supply chains and users on load
     useEffect(() => {
-        const fetchSupplyChains = async () => {
+        const fetchSupplyChainsAndUsers = async () => {
             try {
                 const fetchedChains = await getAllSupplyChains();
                 setSupplyChains(fetchedChains);
                 setFilteredChains(fetchedChains); // Initialize filtered chains
+
+                // Fetch users and map user IDs to usernames
+                const authToken = localStorage.getItem("token");
+                const headers = {
+                    "Authorization": `Bearer ${authToken}`,
+                    "Content-Type": "application/json"
+                };
+
+                const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
+                if (!usersResponse.ok) {
+                    throw new Error("Failed to fetch users");
+                }
+
+                const usersData = await usersResponse.json();
+                const userIdToUsernameMap = usersData.reduce((acc, user) => {
+                    acc[user.id] = user.username;
+                    return acc;
+                }, {});
+
+                setUserIdToUsername(userIdToUsernameMap);
             } catch (error) {
-                console.error('Error fetching supply chains:', error);
+                console.error('Error fetching supply chains or users:', error);
             }
         };
 
-        fetchSupplyChains();
+        fetchSupplyChainsAndUsers();
     }, []);
 
     useEffect(() => {
@@ -83,7 +104,8 @@ const Dashboard = () => {
 
         setIsCreating(true);
         try {
-            const createdChain = await createSupplyChain(newSupplyChain);
+            const userId = localStorage.getItem('userId'); // Get the user ID from local storage
+            const createdChain = await createSupplyChain({ ...newSupplyChain, createdBy: userId }); // Include user ID in the request
             setSupplyChains([...supplyChains, createdChain]);
             setFilteredChains([...filteredChains, createdChain]); // Update filtered chains
             setIsModalOpen(false);
@@ -181,6 +203,7 @@ const Dashboard = () => {
                                 <p className="text-[#778DA9] mt-2">{chain.description}</p>
                                 <p className="text-[#778DA9] mt-2 text-xs">Created: {formatDateTime(chain.createdAt)}</p>
                                 <p className="text-[#778DA9] mt-1 text-xs">Updated: {formatDateTime(chain.updatedAt)}</p>
+                                <p className="text-[#778DA9] mt-1 text-xs">Created By: {userIdToUsername[chain.createdBy] || chain.createdBy}</p> {/* Display Created By */}
                                 <button
                                     onClick={() => navigate(`/supply-chain/${chain.id}`)}
                                     className="mt-4 bg-[#415A77] text-white py-2 px-4 rounded hover:bg-[#778DA9] transition duration-300"
