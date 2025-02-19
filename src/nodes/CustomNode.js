@@ -5,6 +5,8 @@ const CustomNode = ({ data }) => {
     const [isEditing, setIsEditing] = useState(false); // Local edit state
     const [validationErrors, setValidationErrors] = useState({}); // Validation error state
 
+    const currentUserId = localStorage.getItem('userId'); // Get the current logged-in user's ID
+
     const validateFields = () => {
         const errors = {};
         if (!data.name) errors.name = 'Name is required.';
@@ -65,8 +67,24 @@ const CustomNode = ({ data }) => {
         setValidationErrors({}); // Clear validation errors
     };
 
+    // Determine if the node is assigned to the current logged-in user
+    const isAssignedToCurrentUser = data.assignedUser === Number(currentUserId);
+
+    // Define the glowing border style
+    const borderStyle = isAssignedToCurrentUser
+        ? {
+            border: '2px solid #00FF00',
+            boxShadow: '0 0 10px 2px rgba(0, 255, 0, 0.7)',
+        }
+        : {
+            border: '2px solid #415A77',
+        };
+
     return (
-        <div className="custom-node bg-[#1B263B] rounded-lg shadow-md border border-[#415A77] relative w-[200px]">
+        <div
+            className="custom-node bg-[#1B263B] rounded-lg shadow-md relative w-[200px]"
+            style={borderStyle}
+        >
             {/* Always render handles but hide them outside edit mode */}
             <Handle
                 id="left"
@@ -97,7 +115,7 @@ const CustomNode = ({ data }) => {
             </div>
 
             {/* Node Content */}
-            <div className="p-2 text-left bg-[#1B263B] text-gray-300 text-sm">
+            <div className="p-2 text-left bg-[#1B263B] text-gray-300 text-sm rounded-b-lg">
                 <div className="py-1 border-b border-[#415A77]">
                     <strong>Name:</strong> {isEditing ? (
                         <>
