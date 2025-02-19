@@ -18,9 +18,10 @@ const CustomNode = ({ data }) => {
     const handleUserChange = (e) => {
         const selectedUsername = e.target.value;
         const selectedUser = data.users.find(user => user.username === selectedUsername);
-
+    
         if (selectedUser) {
-            data.updateNodeData(data.id, "assignedUser", selectedUsername);
+            data.updateNodeData(data.id, "assignedUser", selectedUser.id); // Store user ID
+            data.updateNodeData(data.id, "assignedUsername", selectedUser.username); // Store username for display
             data.updateNodeData(data.id, "role", selectedUser.role); // Auto-update role
         }
         validateFields(); // Validate fields after user change
@@ -33,9 +34,10 @@ const CustomNode = ({ data }) => {
 
         // Reset user selection if their role doesn't match
         if (data.assignedUser) {
-            const selectedUser = data.users.find(user => user.username === data.assignedUser);
+            const selectedUser = data.users.find(user => user.username === data.assignedUsername);
             if (!selectedUser || selectedUser.role !== selectedRole) {
                 data.updateNodeData(data.id, "assignedUser", ""); // Clear user selection
+                data.updateNodeData(data.id, "assignedUsername", ""); // Clear username display
             }
         }
         validateFields(); // Validate fields after role change
@@ -142,7 +144,7 @@ const CustomNode = ({ data }) => {
                     {isEditing ? (
                         <>
                             <select
-                                value={data.assignedUser}
+                                value={data.assignedUsername || ""}
                                 onChange={handleUserChange}
                                 className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
                             >
@@ -156,7 +158,7 @@ const CustomNode = ({ data }) => {
                             {validationErrors.assignedUser && <p className="text-red-500 text-xs mt-1">{validationErrors.assignedUser}</p>}
                         </>
                     ) : (
-                        <span>{data.assignedUser}</span>
+                        <span>{data.assignedUsername}</span>
                     )}
                 </div>
             </div>

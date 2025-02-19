@@ -236,7 +236,7 @@ const SupplyChain = () => {
                     type: "customNode",
                     name: node.data.name || "Unnamed Node",
                     role: node.data.role || "Unassigned",
-                    assignedUser: node.data.assignedUser || "Unassigned"
+                    assignedUser: node.data.assignedUser || null // Ensure assignedUser is a number
                 })),
                 edges: updatedEdges
             };
