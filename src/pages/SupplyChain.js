@@ -32,83 +32,90 @@ const SupplyChain = () => {
 
     // Fetch supply chain data
     useEffect(() => {
-    const fetchSupplyChainAndUsers = async () => {
-        try {
-            console.log("⏳ Fetching supply chain and users...");
+        const fetchSupplyChainAndUsers = async () => {
+            try {
+                console.log("⏳ Fetching supply chain and users...");
+        
+                // ✅ Fetch Supply Chain Data
+                const data = await getSupplyChainById(id);
+                if (!data) {
+                    console.error("❌ Error: Supply chain is null or undefined!");
+                    return;
+                }
+                console.log("✅ Fetched Supply Chain:", data);
+                setSupplyChain(data);
+        
+                // ✅ Fetch Users and Roles with Auth Header
+                console.log("⏳ Fetching Users and Roles...");
+                const authToken = localStorage.getItem("token"); // Ensure user is logged in
     
-            // ✅ Fetch Supply Chain Data
-            const data = await getSupplyChainById(id);
-            if (!data) {
-                console.error("❌ Error: Supply chain is null or undefined!");
-                return;
-            }
-            console.log("✅ Fetched Supply Chain:", data);
-            setSupplyChain(data);
+                const headers = {
+                    "Authorization": `Bearer ${authToken}`,
+                    "Content-Type": "application/json"
+                };
     
-            if (data.nodes) {
-                setNodes(data.nodes.map((node, index) => ({
-                    id: `${index + 1}`,
-                    type: "customNode",
-                    position: { x: node.x ?? 100, y: node.y ?? 100 },
-                    data: {
+                const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
+                const rolesResponse = await fetch("http://localhost:8080/api/users/roles", { headers });
+    
+                if (!usersResponse.ok || !rolesResponse.ok) {
+                    throw new Error("Failed to fetch users or roles");
+                }
+    
+                const usersData = await usersResponse.json();
+                const rolesData = await rolesResponse.json();
+    
+                console.log("✅ Fetched Users:", usersData);
+                console.log("✅ Fetched Roles:", rolesData);
+    
+                setUsers(usersData || []);  // ✅ Ensure no undefined errors
+                setRoles(rolesData || []);  // ✅ Ensure no undefined errors
+    
+                // Map user IDs to usernames
+                const userIdToUsername = usersData.reduce((acc, user) => {
+                    acc[user.id] = user.username;
+                    return acc;
+                }, {});
+    
+                if (data.nodes) {
+                    setNodes(data.nodes.map((node, index) => ({
                         id: `${index + 1}`,
-                        label: node.type || "Unnamed",
-                        name: node.name || "Unnamed Node",
-                        role: node.role || "Unassigned",
-                        assignedUser: node.assignedUser || "Unassigned",
-                        isEditMode,
-                        onDelete: handleDeleteNode,
-                        onEdit: handleEditNode,
-                    }
-                })));
-            }
+                        type: "customNode",
+                        position: { x: node.x ?? 100, y: node.y ?? 100 },
+                        data: {
+                            id: `${index + 1}`,
+                            label: node.type || "Unnamed",
+                            name: node.name || "Unnamed Node",
+                            role: node.role || "Unassigned",
+                            assignedUser: node.assignedUser || "Unassigned",
+                            assignedUsername: userIdToUsername[node.assignedUser] || "Unassigned", // Include username
+                            isEditMode,
+                            onDelete: handleDeleteNode,
+                            onEdit: handleEditNode,
+                        }
+                    })));
+                }
+        
+                if (data.edges) {
+                    setEdges(data.edges.map((edge) => ({
+                        id: `${edge.id}`,
+                        source: `${edge.source}`,
+                        target: `${edge.target}`,
+                        sourceHandle: edge.sourceHandle || "right",
+                        targetHandle: edge.targetHandle || "left",
+                        animated: edge.animated ?? true,
+                        style: { stroke: edge.strokeColor || "#778DA9", strokeWidth: edge.strokeWidth ?? 2 }
+                    })));
+                }
     
-            if (data.edges) {
-                setEdges(data.edges.map((edge) => ({
-                    id: `${edge.id}`,
-                    source: `${edge.source}`,
-                    target: `${edge.target}`,
-                    sourceHandle: edge.sourceHandle || "right",
-                    targetHandle: edge.targetHandle || "left",
-                    animated: edge.animated ?? true,
-                    style: { stroke: edge.strokeColor || "#778DA9", strokeWidth: edge.strokeWidth ?? 2 }
-                })));
+            } catch (err) {
+                console.error("❌ Error fetching supply chain or users/roles:", err);
+            } finally {
+                setLoading(false);
             }
+        };
     
-            // ✅ Fetch Users and Roles with Auth Header
-            console.log("⏳ Fetching Users and Roles...");
-            const authToken = localStorage.getItem("token"); // Ensure user is logged in
-
-            const headers = {
-                "Authorization": `Bearer ${authToken}`,
-                "Content-Type": "application/json"
-            };
-
-            const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
-            const rolesResponse = await fetch("http://localhost:8080/api/users/roles", { headers });
-
-            if (!usersResponse.ok || !rolesResponse.ok) {
-                throw new Error("Failed to fetch users or roles");
-            }
-
-            const usersData = await usersResponse.json();
-            const rolesData = await rolesResponse.json();
-
-            console.log("✅ Fetched Users:", usersData);
-            console.log("✅ Fetched Roles:", rolesData);
-
-            setUsers(usersData || []);  // ✅ Ensure no undefined errors
-            setRoles(rolesData || []);  // ✅ Ensure no undefined errors
-
-        } catch (err) {
-            console.error("❌ Error fetching supply chain or users/roles:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    fetchSupplyChainAndUsers();
-}, [id]);  // ✅ Removed `isEditMode` dependency
+        fetchSupplyChainAndUsers();
+    }, [id]);
 
        
 
