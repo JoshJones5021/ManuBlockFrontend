@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { logoutUser } from '../../services/api';
 import blockies from 'ethereum-blockies';
+import Web3 from 'web3';
 
 const Navbar = () => {
     const [walletAddress, setWalletAddress] = useState('');
@@ -22,16 +23,37 @@ const Navbar = () => {
             }).toDataURL();
 
             setProfileImage(blockiesIcon);
+
+            // Automatically connect MetaMask if wallet address is stored
+            connectMetaMask(storedWallet);
         }
         if (storedUsername) {
             setUsername(storedUsername);
         }
     }, []);
 
+    const connectMetaMask = async (walletAddress) => {
+        if (window.ethereum && walletAddress !== 'Not connected') {
+            const web3 = new Web3(window.ethereum);
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const accounts = await web3.eth.getAccounts();
+                if (accounts.length > 0 && accounts[0].toLowerCase() === walletAddress.toLowerCase()) {
+                    console.log('MetaMask connected automatically');
+                }
+            } catch (error) {
+                console.error('Error connecting MetaMask:', error);
+            }
+        }
+    };
+
     const handleLogout = async () => {
         try {
             await logoutUser();
-            localStorage.clear();
+            localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('username');
+            localStorage.removeItem('role');
             window.location.href = '/login';
         } catch (error) {
             console.error('Logout failed:', error);

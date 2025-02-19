@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode'; 
+import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
+import Web3 from 'web3';
 import manublockLogo from '../assets/manublock.png';
 
 const Login = () => {
@@ -22,32 +23,64 @@ const Login = () => {
         e.preventDefault();
         setError('');
         setMessage('');
-    
+        setLoading(true);
+
         try {
             const response = await axios.post('http://localhost:8080/api/users/login', {
                 email: email.trim(),
                 password: password.trim(),
             });
-    
+
+            console.log('Login response:', response.data); // Log the response data
+
             if (response.status === 200 && response.data.token) {
                 const token = response.data.token;
                 const walletAddress = response.data.walletAddress;
-    
+
+                console.log('Wallet address from response:', walletAddress); // Log the wallet address
+
                 localStorage.setItem('token', token);
                 localStorage.setItem('walletAddress', walletAddress || 'Not connected');
-    
+
                 const decodedToken = jwtDecode(token);
                 localStorage.setItem('userId', decodedToken.id.toString());
                 localStorage.setItem('username', decodedToken.username);
                 localStorage.setItem('role', decodedToken.role);
-    
+
                 setMessage('Login successful! Redirecting...');
-                setTimeout(() => navigate('/dashboard'), 1500);
+                console.log('Login successful! Redirecting...');
+                setTimeout(() => {
+                    navigate('/dashboard');
+                    connectMetaMask(walletAddress); // Trigger MetaMask connection
+                }, 1500);
             } else {
                 setError('Invalid login attempt. Please try again.');
             }
         } catch (err) {
+            console.error('Login error:', err); // Log the error
             setError(err.response?.data?.error || 'Something went wrong. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const connectMetaMask = async (walletAddress) => {
+        console.log('Attempting to connect MetaMask with wallet address:', walletAddress);
+        if (window.ethereum && walletAddress && walletAddress !== 'Not connected') {
+            const web3 = new Web3(window.ethereum);
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const accounts = await web3.eth.getAccounts();
+                if (accounts.length > 0 && accounts[0].toLowerCase() === walletAddress.toLowerCase()) {
+                    console.log('MetaMask connected automatically');
+                } else {
+                    console.log('MetaMask account does not match the stored wallet address');
+                }
+            } catch (error) {
+                console.error('Error connecting MetaMask:', error);
+            }
+        } else {
+            console.log('MetaMask not available or wallet address is not valid');
         }
     };
 

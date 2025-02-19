@@ -50,11 +50,11 @@ const Profile = () => {
                         method: 'wallet_requestPermissions',
                         params: [{ eth_accounts: {} }],
                     });
-    
+
                     const web3 = new Web3(window.ethereum);
                     await window.ethereum.request({ method: 'eth_requestAccounts' });
                     const accounts = await web3.eth.getAccounts();
-    
+
                     if (accounts.length > 0) {
                         const newWalletAddress = accounts[0];
                         setUser((prev) => ({
@@ -62,10 +62,10 @@ const Profile = () => {
                             walletAddress: newWalletAddress,
                         }));
                         localStorage.setItem('walletAddress', newWalletAddress);
-    
+
                         // Generate new Blockies profile image
                         generateProfileImage(newWalletAddress);
-    
+
                         // Update the backend with the wallet address
                         const token = localStorage.getItem('token');
                         const userId = localStorage.getItem('userId');
@@ -87,7 +87,7 @@ const Profile = () => {
         } else {
             handleDisconnectWallet();
         }
-    };    
+    };
 
     const handleDisconnectWallet = async () => {
         try {
