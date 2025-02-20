@@ -88,6 +88,7 @@ const SupplyChain = () => {
                             role: node.role || "Unassigned",
                             assignedUser: node.assignedUser || "Unassigned",
                             assignedUsername: userIdToUsername[node.assignedUser] || "Unassigned", // Include username
+                            status: node.status || "pending", // Add status field
                             isEditMode,
                             onDelete: handleDeleteNode,
                             onEdit: handleEditNode,
@@ -150,7 +151,7 @@ const SupplyChain = () => {
 
     // Handle Modal Save
     const handleSaveNode = () => {
-        if (!selectedNode.data.name || !selectedNode.data.role || !selectedNode.data.assignedUser) {
+        if (!selectedNode.data.name || !selectedNode.data.role || !selectedNode.data.assignedUser || !selectedNode.data.status) {
             setValidationError('All fields must be filled.');
             return;
         }
@@ -241,7 +242,8 @@ const SupplyChain = () => {
                     type: "customNode",
                     name: node.data.name || "Unnamed Node",
                     role: node.data.role || "Unassigned",
-                    assignedUser: node.data.assignedUser || null // Ensure assignedUser is a number
+                    assignedUser: node.data.assignedUser || null, // Ensure assignedUser is a number
+                    status: node.data.status || "pending" // Add status field
                 })),
                 edges: updatedEdges
             };
@@ -261,6 +263,19 @@ const SupplyChain = () => {
     if (loading) {
         return <p className="text-white text-center mt-10">Loading...</p>;
     }
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case "pending":
+                return "text-blue-500";
+            case "processing":
+                return "text-yellow-500";
+            case "done":
+                return "text-green-500";
+            default:
+                return "text-white";
+        }
+    };
 
     return (
         <div className="flex h-screen bg-[#0D1B2A] text-[#E0E1DD]">
@@ -330,7 +345,8 @@ const SupplyChain = () => {
                                     },
                                     onEditStateChange: (nodeId, isEditing) => {
                                         setEditingNodes(prev => ({ ...prev, [nodeId]: isEditing }));
-                                    }
+                                    },
+                                    getStatusColor, // Pass the getStatusColor function
                                 }
                             }))}
                             edges={edges
@@ -390,6 +406,18 @@ const SupplyChain = () => {
                             onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, assignedUser: e.target.value } })}
                             className="w-full p-2 mb-4 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
                         />
+                        <select
+                            value={selectedNode?.data?.status || "pending"}
+                            onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, status: e.target.value } })}
+                            className="w-full p-2 mb-4 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="done">Done</option>
+                        </select>
+                        <span className={getStatusColor(selectedNode?.data?.status)}>
+                            {selectedNode?.data?.status}
+                        </span>
                         <button
                             onClick={handleSaveNode}
                             className="bg-green-500 px-4 py-2 rounded text-white mr-2"

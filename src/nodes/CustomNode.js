@@ -1,3 +1,4 @@
+// Inside CustomNode.js
 import React, { useState } from "react";
 import { Handle, Position } from "reactflow";
 
@@ -53,6 +54,12 @@ const CustomNode = ({ data }) => {
         validateFields(); // Validate fields after name change
     };
 
+    // Function to handle status change
+    const handleStatusChange = (e) => {
+        const newStatus = e.target.value;
+        data.updateNodeData(data.id, "status", newStatus);
+    };
+
     // Filter users based on selected role
     const filteredUsers = data.role
         ? data.users.filter(user => user.role === data.role) // Show only users matching the role
@@ -82,9 +89,16 @@ const CustomNode = ({ data }) => {
             border: '2px solid #415A77',
         };
 
+    // Define the background color based on status
+    const statusColor = {
+        pending: 'bg-blue-500',
+        processing: 'bg-yellow-500',
+        done: 'bg-green-500',
+    }[data.status] || 'bg-gray-500';
+
     return (
         <div
-            className="custom-node bg-[#1B263B] rounded-lg shadow-md relative w-[200px]"
+            className={`custom-node ${statusColor} rounded-lg shadow-md relative w-[200px]`}
             style={borderStyle}
         >
             {/* Always render handles but hide them outside edit mode */}
@@ -156,7 +170,7 @@ const CustomNode = ({ data }) => {
                 </div>
 
                 {/* User Dropdown */}
-                <div className="py-1">
+                <div className="py-1 border-b border-[#415A77]">
                     <strong>User: </strong>
                     {isEditing ? (
                         <>
@@ -176,6 +190,26 @@ const CustomNode = ({ data }) => {
                         </>
                     ) : (
                         <span>{data.assignedUsername}</span>
+                    )}
+                </div>
+
+                {/* Status Dropdown */}
+                <div className="py-1">
+                    <strong>Status: </strong>
+                    {isEditing ? (
+                        <select
+                            value={data.status || "pending"}
+                            onChange={handleStatusChange}
+                            className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="done">Done</option>
+                        </select>
+                    ) : (
+                        <span className={data.getStatusColor(data.status)}>
+                            {data.status}
+                        </span>
                     )}
                 </div>
             </div>
