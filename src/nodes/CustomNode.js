@@ -2,6 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Handle, Position } from "reactflow";
 import { updateNode } from "../services/supplyChainApi"; // Import the updateNode function
 
+// Define the getRandomColor function
+const getRandomColor = () => {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+};
+
 const CustomNode = ({ data }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [localData, setLocalData] = useState({
@@ -13,6 +23,7 @@ const CustomNode = ({ data }) => {
     });
     const [validationErrors, setValidationErrors] = useState({});
     const [filteredUsers, setFilteredUsers] = useState([]);
+    const [circleColor] = useState(getRandomColor()); // Generate random color once
 
     const currentUserId = localStorage.getItem('userId');
 
@@ -143,7 +154,16 @@ const CustomNode = ({ data }) => {
             <Handle id="right" type="source" position={Position.Right} className={`!bg-[#778DA9] ${data.isEditMode ? "opacity-100" : "opacity-0"}`} />
 
             <div className="bg-[#415A77] text-white font-bold p-2 flex justify-between items-center rounded-t-lg">
-                <span>{localData.name || "Unnamed Node"}</span>
+                <div className="flex items-center">
+                    {/* Circle with Position Number */}
+                    <div
+                        className="w-6 h-6 rounded-full flex items-center justify-center mr-2"
+                        style={{ backgroundColor: circleColor }}
+                    >
+                        <span className="text-xs text-[#415A77] font-bold">{data.position}</span>
+                    </div>
+                    <span>{localData.name || "Unnamed Node"}</span>
+                </div>
                 {data.isEditMode && (
                     <button
                         className="w-6 h-6 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-md flex items-center justify-center shadow-md transition"

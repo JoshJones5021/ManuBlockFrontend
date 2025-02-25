@@ -54,7 +54,7 @@ const SupplyChain = () => {
                 console.log("✅ Fetched Supply Chain:", data);
                 setSupplyChain(data);
     
-                // ✅ Map users
+                // ✅ Fetch Users
                 const usersResponse = await fetch("http://localhost:8080/api/users/", {
                     headers: {
                         "Authorization": `Bearer ${localStorage.getItem("token")}`,
@@ -69,6 +69,17 @@ const SupplyChain = () => {
                     acc[user.id] = user.username;
                     return acc;
                 }, {});
+    
+                // ✅ Fetch Roles
+                const rolesResponse = await fetch("http://localhost:8080/api/users/roles", {
+                    headers: {
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+    
+                const rolesData = await rolesResponse.json();
+                setRoles(rolesData || []);
     
                 // ✅ Set Nodes with Correct Positions
                 if (data.nodes) {
@@ -90,7 +101,20 @@ const SupplyChain = () => {
                             onEdit: handleEditNode,
                         }
                     }));
-                    setNodes(initialNodes);
+    
+                    // Calculate node positions
+                    const nodePositions = calculateNodePositions(initialNodes, data.edges);
+    
+                    // Update nodes with positions
+                    const nodesWithPositions = initialNodes.map(node => ({
+                        ...node,
+                        data: {
+                            ...node.data,
+                            position: nodePositions[node.id]
+                        }
+                    }));
+    
+                    setNodes(nodesWithPositions);
     
                     // ✅ Manually set viewport to center based on nodes' positions
                     if (initialNodes.length > 0) {
@@ -357,6 +381,43 @@ const SupplyChain = () => {
         }
     };   
 
+    const calculateNodePositions = (nodes, edges) => {
+        const nodePositions = {};
+        const nodeDependencies = {};
+    
+        // Initialize node dependencies
+        nodes.forEach(node => {
+            nodeDependencies[node.id] = {
+                incoming: [],
+                outgoing: []
+            };
+        });
+    
+        // Populate node dependencies based on edges
+        edges.forEach(edge => {
+            nodeDependencies[edge.source].outgoing.push(edge.target);
+            nodeDependencies[edge.target].incoming.push(edge.source);
+        });
+    
+        // Find the starting nodes (nodes with no incoming edges)
+        const startingNodes = nodes.filter(node => nodeDependencies[node.id].incoming.length === 0);
+    
+        // Perform a breadth-first search to determine node positions
+        const queue = [...startingNodes];
+        let position = 1;
+    
+        while (queue.length > 0) {
+            const currentNode = queue.shift();
+            nodePositions[currentNode.id] = position++;
+    
+            nodeDependencies[currentNode.id].outgoing.forEach(targetNodeId => {
+                queue.push(nodes.find(node => node.id === targetNodeId));
+            });
+        }
+    
+        return nodePositions;
+    };
+
     // Save Supply Chain
     const handleSaveSupplyChain = async () => {
         try {
@@ -491,30 +552,30 @@ const SupplyChain = () => {
                                 ...node,
                                 type: "customNode",
                                 data: {
-                                ...node.data,
-                                isEditMode,
-                                users,
-                                roles,
-                                onDelete: (nodeId, event) => handleDeleteNode(nodeId, event),
-                                onEdit: handleEditNode,
-                                updateNodeData: (nodeId, updatedData) => {
-                                    setNodes((prevNodes) =>
-                                    prevNodes.map((n) =>
-                                        n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
-                                    )
-                                    );
-                                },
-                                onSaveNode: (nodeId) => handleSaveNode(nodeId),
-                                onEditStateChange: (nodeId, isEditing) => {
-                                    setEditingNodes((prev) => ({
-                                    ...prev,
-                                    [nodeId]: isEditing,
-                                    }));
-                                },
-                                getStatusColor,
-                                role: node.data.role || "Unassigned",
-                                assignedUser: node.data.assignedUser || "Unassigned",
-                                assignedUsername: node.data.assignedUsername || "Unassigned",
+                                    ...node.data,
+                                    isEditMode,
+                                    users,
+                                    roles, // Pass roles to nodes
+                                    onDelete: (nodeId, event) => handleDeleteNode(nodeId, event),
+                                    onEdit: handleEditNode,
+                                    updateNodeData: (nodeId, updatedData) => {
+                                        setNodes((prevNodes) =>
+                                            prevNodes.map((n) =>
+                                                n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
+                                            )
+                                        );
+                                    },
+                                    onSaveNode: (nodeId) => handleSaveNode(nodeId),
+                                    onEditStateChange: (nodeId, isEditing) => {
+                                        setEditingNodes((prev) => ({
+                                            ...prev,
+                                            [nodeId]: isEditing,
+                                        }));
+                                    },
+                                    getStatusColor,
+                                    role: node.data.role || "Unassigned",
+                                    assignedUser: node.data.assignedUser || "Unassigned",
+                                    assignedUsername: node.data.assignedUsername || "Unassigned",
                                 }
                             }))}
                             edges={edges.filter(edge => 
@@ -526,11 +587,11 @@ const SupplyChain = () => {
                                 deletable: isEditMode,
                                 selectable: isEditMode,
                                 style: {
-                                stroke: "#778DA9",
-                                strokeWidth: 2,
-                                opacity: 1,
+                                    stroke: "#778DA9",
+                                    strokeWidth: 2,
+                                    opacity: 1,
                                 }
-                            }))}
+                            }))}                                                                                                                                           
                             onNodesChange={isEditMode ? onNodesChange : undefined}
                             onEdgesChange={isEditMode ? onEdgesChange : undefined}
                             onConnect={isEditMode ? onConnect : undefined}
@@ -539,7 +600,7 @@ const SupplyChain = () => {
                             nodesDraggable={isEditMode}
                             fitViewOnInit={false}  // 🔥 Prevent auto-fit on load
                             defaultViewport={{ x: 0, y: 0, zoom: 1 }} // Set your initial viewport settings
-                            >
+                        >
                             <MiniMap />
                             <Controls />
                             <Background />
