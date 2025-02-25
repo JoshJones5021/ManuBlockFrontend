@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { getSupplyChainById, updateSupplyChain } from "../services/supplyChainApi";
-import ReactFlow, { MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge } from "reactflow";
+import {
+    getSupplyChainById,
+    createNode,
+    updateNode,
+    deleteNode,
+    createEdge,
+    deleteEdge,
+    updateSupplyChain
+  } from "../services/supplyChainApi";  
+import ReactFlow, { MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge, useReactFlow } from "reactflow";
 import "reactflow/dist/style.css";
 import Navbar from "../components/navbar/NavBar";
 import Sidebar from "../components/sidebar/Sidebar";
@@ -25,6 +33,7 @@ const SupplyChain = () => {
     // React Flow State
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const { setViewport } = useReactFlow();
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,7 +44,7 @@ const SupplyChain = () => {
         const fetchSupplyChainAndUsers = async () => {
             try {
                 console.log("⏳ Fetching supply chain and users...");
-        
+    
                 // ✅ Fetch Supply Chain Data
                 const data = await getSupplyChainById(id);
                 if (!data) {
@@ -44,58 +53,54 @@ const SupplyChain = () => {
                 }
                 console.log("✅ Fetched Supply Chain:", data);
                 setSupplyChain(data);
-        
-                // ✅ Fetch Users and Roles with Auth Header
-                console.log("⏳ Fetching Users and Roles...");
-                const authToken = localStorage.getItem("token"); // Ensure user is logged in
     
-                const headers = {
-                    "Authorization": `Bearer ${authToken}`,
-                    "Content-Type": "application/json"
-                };
-    
-                const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
-                const rolesResponse = await fetch("http://localhost:8080/api/users/roles", { headers });
-    
-                if (!usersResponse.ok || !rolesResponse.ok) {
-                    throw new Error("Failed to fetch users or roles");
-                }
+                // ✅ Map users
+                const usersResponse = await fetch("http://localhost:8080/api/users/", {
+                    headers: {
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Content-Type": "application/json",
+                    },
+                });
     
                 const usersData = await usersResponse.json();
-                const rolesData = await rolesResponse.json();
+                setUsers(usersData || []);
     
-                console.log("✅ Fetched Users:", usersData);
-                console.log("✅ Fetched Roles:", rolesData);
-    
-                setUsers(usersData || []);  // ✅ Ensure no undefined errors
-                setRoles(rolesData || []);  // ✅ Ensure no undefined errors
-    
-                // Map user IDs to usernames
                 const userIdToUsername = usersData.reduce((acc, user) => {
                     acc[user.id] = user.username;
                     return acc;
                 }, {});
     
+                // ✅ Set Nodes with Correct Positions
                 if (data.nodes) {
-                    setNodes(data.nodes.map((node, index) => ({
-                        id: `${index + 1}`,
+                    const initialNodes = data.nodes.map((node) => ({
+                        id: `${node.id}`,
                         type: "customNode",
-                        position: { x: node.x ?? 100, y: node.y ?? 100 },
+                        position: { x: node.x, y: node.y },
                         data: {
-                            id: `${index + 1}`,
-                            label: node.name || "Unnamed Node", // Set label to node name
+                            id: node.id,
+                            label: node.name || "Unnamed Node",
                             name: node.name || "Unnamed Node",
                             role: node.role || "Unassigned",
                             assignedUser: node.assignedUser || "Unassigned",
-                            assignedUsername: userIdToUsername[node.assignedUser] || "Unassigned", // Include username
-                            status: node.status || "pending", // Add status field
+                            assignedUsername: userIdToUsername[node.assignedUser] || "Unassigned",
+                            status: node.status || "pending",
+                            supplyChainId: id,
                             isEditMode,
                             onDelete: handleDeleteNode,
                             onEdit: handleEditNode,
                         }
-                    })));
+                    }));
+                    setNodes(initialNodes);
+    
+                    // ✅ Manually set viewport to center based on nodes' positions
+                    if (initialNodes.length > 0) {
+                        const avgX = initialNodes.reduce((sum, node) => sum + node.position.x, 0) / initialNodes.length;
+                        const avgY = initialNodes.reduce((sum, node) => sum + node.position.y, 0) / initialNodes.length;
+                        setViewport({ x: avgX - 500, y: avgY - 300, zoom: 1 }); // Manually adjust view based on average position
+                    }
                 }
-        
+    
+                // ✅ Set Edges
                 if (data.edges) {
                     setEdges(data.edges.map((edge) => ({
                         id: `${edge.id}`,
@@ -119,21 +124,89 @@ const SupplyChain = () => {
     }, [id]);
 
     // Handle Node Drop
-    const onDrop = (event) => {
+    const onDrop = async (event) => {
         event.preventDefault();
         const nodeType = event.dataTransfer.getData("nodeType");
-
+    
         if (!nodeType) return;
-
-        const position = { x: event.clientX - 250, y: event.clientY - 100 };
+    
+        if (users.length === 0) {
+            console.error("Users array is empty. Cannot create node.");
+            return;
+        }
+    
+        const reactFlowBounds = event.target.getBoundingClientRect();
+        const position = {
+            x: event.clientX - reactFlowBounds.left,
+            y: event.clientY - reactFlowBounds.top,
+        };
+    
         const newNode = {
-            id: `${nodes.length + 1}`,
+            id: null, // Set id to null for the POST request
             type: "customNode",
             position,
-            data: { id: `${nodes.length + 1}`, label: nodeType, name: "", role: "", assignedUser: "", isEditMode, onDelete: handleDeleteNode, onEdit: handleEditNode },
+            data: {
+                name: "Unnamed Node",
+                role: "",
+                assignedUser: "",
+                assignedUsername: "",
+                status: "pending",
+                supplyChainId: id, // Include supplyChainId
+                x: position.x, // Include x position
+                y: position.y, // Include y position
+                isEditMode,
+                users, // Pass users to the new node
+                roles, // Pass roles to the new node
+                onDelete: handleDeleteNode,
+                onEdit: handleEditNode,
+                updateNodeData: (nodeId, updatedData) => {
+                    setNodes((prevNodes) =>
+                        prevNodes.map((n) =>
+                            n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
+                        )
+                    );
+                },
+                onSaveNode: (nodeId) => handleSaveNode(nodeId),
+                onEditStateChange: (nodeId, isEditing) => {
+                    setEditingNodes((prev) => ({
+                        ...prev,
+                        [nodeId]: isEditing,
+                    }));
+                },
+                getStatusColor,
+            },
         };
-
-        setNodes((nds) => [...nds, newNode]);
+    
+        // Send node creation request to backend
+        try {
+            const createdNode = await createNode(id, {
+                name: newNode.data.name,
+                role: newNode.data.role,
+                assignedUser: newNode.data.assignedUser,
+                supplyChainId: newNode.data.supplyChainId,
+                x: newNode.position.x,
+                y: newNode.position.y,
+                status: newNode.data.status,
+            });
+            newNode.id = createdNode.id; // Assign backend-generated ID
+            newNode.data.id = createdNode.id; // Assign backend-generated ID to data
+            setNodes((nds) => [
+                ...nds,
+                {
+                    ...newNode,
+                    id: createdNode.id.toString(), // Ensure the ID is a string
+                    position: { x: createdNode.x, y: createdNode.y }, // Use the position from the backend
+                    data: {
+                        ...newNode.data,
+                        id: createdNode.id,
+                        x: createdNode.x,
+                        y: createdNode.y,
+                    },
+                },
+            ]);
+        } catch (error) {
+            console.error("Error creating node:", error);
+        }
     };
 
     // Allow Dragging from Sidebar
@@ -150,113 +223,201 @@ const SupplyChain = () => {
     };
 
     // Handle Modal Save
-    const handleSaveNode = () => {
-        if (!selectedNode.data.name || !selectedNode.data.role || !selectedNode.data.assignedUser || !selectedNode.data.status) {
-            setValidationError('All fields must be filled.');
+    const handleSaveNode = async (nodeId) => {
+        const nodeToSave = nodes.find((node) => node.id === nodeId);
+
+        if (
+            !nodeToSave.data.name ||
+            !nodeToSave.data.role ||
+            !nodeToSave.data.assignedUser
+        ) {
+            setValidationError("All fields must be filled.");
             return;
         }
-    
-        setNodes((nds) =>
-            nds.map((node) =>
-                node.id === selectedNode.id ? { ...node, data: selectedNode.data } : node
-            )
-        );
-        setIsModalOpen(false);
-        setEditingNodes(prev => ({ ...prev, [selectedNode.id]: false })); // Set to false when node is saved
-        setValidationError(''); // Clear validation error
+
+        try {
+            // Use the backend-generated node ID for the update request
+            const backendNodeId = nodeToSave.data.id;
+
+            // Save changes to the backend
+            await updateNode(nodeToSave.data.supplyChainId, backendNodeId, {
+                name: nodeToSave.data.name,
+                role: nodeToSave.data.role,
+                assignedUser: nodeToSave.data.assignedUser,
+                status: nodeToSave.data.status,
+                x: nodeToSave.position.x,
+                y: nodeToSave.position.y,
+            });
+
+            // Update local state
+            setNodes((prevNodes) =>
+                prevNodes.map((node) =>
+                    node.id === nodeId ? { ...node, data: { ...nodeToSave.data } } : node
+                )
+            );
+
+            setEditingNodes((prev) => ({
+                ...prev,
+                [nodeId]: false,
+            }));
+
+            setValidationError("");
+        } catch (error) {
+            console.error("Error saving node:", error);
+        }
     };
 
     // Handle Node Deletion
-    const handleDeleteNode = (nodeId, event) => {
-        if (event) event.stopPropagation(); // ✅ Prevents parent handlers from running
-        setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-        setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-    };     
-
+    const handleDeleteNode = async (nodeId, event) => {
+        if (event) event.stopPropagation();
+    
+        const confirmDelete = window.confirm("Are you sure you want to delete this node?");
+        if (!confirmDelete) return;
+    
+        try {
+            // Convert nodeId to string for consistency
+            const nodeIdStr = String(nodeId);
+    
+            // Find all edges connected to this node
+            const connectedEdges = edges.filter(
+                (edge) => edge.source === nodeIdStr || edge.target === nodeIdStr
+            );
+    
+            // First delete all connected edges from the backend
+            const edgeDeletionPromises = connectedEdges.map((edge) =>
+                deleteEdge(id, edge.id)
+            );
+    
+            // Wait for all edge deletions to complete
+            await Promise.all(edgeDeletionPromises);
+    
+            // Then delete the node from the backend
+            await deleteNode(id, nodeId);
+    
+            // Update the UI by removing the node from state
+            setNodes((prevNodes) => prevNodes.filter((node) => node.id !== nodeIdStr));
+    
+            // Update the UI by removing any edges connected to this node
+            setEdges((prevEdges) =>
+                prevEdges.filter((edge) => edge.source !== nodeIdStr && edge.target !== nodeIdStr)
+            );
+    
+            // ✅ Remove the node from the editing state
+            setEditingNodes((prev) => {
+                const updatedEditingNodes = { ...prev };
+                delete updatedEditingNodes[nodeIdStr];
+                return updatedEditingNodes;
+            });
+        } catch (error) {
+            console.error("Error deleting node or its edges:", error);
+            alert("An error occurred while deleting the node. Please try again.");
+        }
+    };    
+    
     // Handle Node Edit
     const handleEditNode = (nodeId) => {
-        const nodeToEdit = nodes.find(node => node.id === nodeId);
-        setSelectedNode(nodeToEdit);
-        setIsModalOpen(true);
-        setEditingNodes(prev => ({ ...prev, [nodeId]: true })); // Set to true when node is being edited
-    };
+        setEditingNodes((prev) => ({
+          ...prev,
+          [nodeId]: true,
+        }));
+      };      
 
     // Handle Node Connections
     const onConnect = useCallback(
-        (params) => {
-            console.log("🔗 Connecting nodes:", params);
+        async (params) => {
             if (isEditMode) {
-                setEdges((prevEdges) => addEdge(
-                    {
-                        ...params,
-                        sourceHandle: params.sourceHandle || "right", // Ensure the source handle is used
-                        targetHandle: params.targetHandle || "left",  // Ensure the target handle is used
-                        animated: true,
-                        style: { stroke: "#778DA9", strokeWidth: 2 },
-                    },
-                    prevEdges
-                ));
+                const newEdge = {
+                    source: params.source,
+                    target: params.target,
+                    sourceHandle: params.sourceHandle || "right",
+                    targetHandle: params.targetHandle || "left",
+                    animated: true,
+                };
+
+                try {
+                    const createdEdge = await createEdge(id, newEdge);
+                    setEdges((eds) => [...eds, { ...newEdge, id: createdEdge.id }]);
+                } catch (error) {
+                    console.error("Error creating edge:", error);
+                }
             }
         },
-        [setEdges, isEditMode]
-    );      
+        [id, isEditMode, setEdges]
+    ); 
     
-    const onEdgeClick = (event, edge) => {
+    const onEdgeClick = async (event, edge) => {
         event.stopPropagation();
         if (isEditMode) {
-            setEdges(prevEdges => prevEdges.filter(e => e.id !== edge.id));
+            try {
+                await deleteEdge(id, edge.id);
+                setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+            } catch (error) {
+                console.error("Error deleting edge:", error);
+            }
         }
-    };     
+    };   
 
     // Save Supply Chain
     const handleSaveSupplyChain = async () => {
         try {
-            const nodeIdMap = {};
-    
-            supplyChain.nodes.forEach((node, index) => {
-                nodeIdMap[nodes[index]?.id] = node.id || null; // Map frontend IDs to backend IDs
+            // 🔄 Fetch the latest nodes from the backend before saving
+            const latestNodesResponse = await fetch(`http://localhost:8080/api/supply-chains/${id}/nodes`, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json"
+                }
             });
     
-            let maxEdgeId = Math.max(...edges.map(e => Number(e.id) || 0), 0); // Ensure max ID is a number
+            const latestNodes = await latestNodesResponse.json();
     
-            const updatedEdges = edges.map(edge => ({
-                id: edge.id && edge.id !== "null" ? Number(edge.id) : ++maxEdgeId,  // Ensure ID is a valid long number
-                source: edge.source,
-                target: edge.target,
-                sourceHandle: edge.sourceHandle || "right",
-                targetHandle: edge.targetHandle || "left",
-                supply_chain_id: supplyChain.id,
-                animated: false,
-                strokeColor: "#778DA9",
-                strokeWidth: 2
-            }));      
+            // 🔄 Fetch the latest edges from the backend (optional, but keeps consistency)
+            const latestEdgesResponse = await fetch(`http://localhost:8080/api/supply-chains/${id}/edges`, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json"
+                }
+            });
     
+            const latestEdges = await latestEdgesResponse.json();
+    
+            // Update the entire supply chain with the latest node & edge data
             const updatedSupplyChain = {
                 id: supplyChain.id,
                 name: supplyChain.name,
                 description: supplyChain.description,
-                nodes: nodes.map(node => ({
-                    id: node.id && !isNaN(Number(node.id)) ? Number(node.id) : null, // ✅ Convert to number
-                    x: node.position.x,
-                    y: node.position.y,
-                    type: "customNode",
-                    name: node.data.name || "Unnamed Node",
-                    role: node.data.role || "Unassigned",
-                    assignedUser: node.data.assignedUser || null, // Ensure assignedUser is a number
-                    status: node.data.status || "pending" // Add status field
+                updatedAt: new Date().toISOString(),
+                nodes: latestNodes.map((node) => ({
+                    id: node.id,
+                    name: node.name,
+                    role: node.role,
+                    assignedUser: node.assignedUser,
+                    status: node.status,
+                    x: node.x,
+                    y: node.y,
                 })),
-                edges: updatedEdges
+                edges: latestEdges.map((edge) => ({
+                    id: edge.id,
+                    source: edge.source,
+                    target: edge.target,
+                    sourceHandle: edge.sourceHandle,
+                    targetHandle: edge.targetHandle,
+                    animated: edge.animated,
+                })),
             };
     
-            console.log("📤 Saving updated supply chain:", JSON.stringify(updatedSupplyChain, null, 2));
+            // ✅ Send the updated supply chain to the backend
+            const response = await updateSupplyChain(id, updatedSupplyChain);
     
-            await updateSupplyChain(id, updatedSupplyChain);
+            // Update the state to reflect the saved changes
+            setSupplyChain((prev) => ({
+                ...prev,
+                updatedAt: response.updatedAt
+            }));
     
-            setEdges(updatedEdges);
             setIsEditMode(false);
-            alert("Supply Chain saved successfully!");
+            alert("✅ Supply chain updated successfully!");
         } catch (error) {
-            console.error("❌ Error saving supply chain:", error);
+            console.error("❌ Error updating supply chain:", error);
         }
     };
 
@@ -330,46 +491,55 @@ const SupplyChain = () => {
                                 ...node,
                                 type: "customNode",
                                 data: {
-                                    ...node.data,
-                                    isEditMode,
-                                    users, // ✅ Pass users
-                                    roles, // ✅ Pass roles
-                                    onDelete: (nodeId, event) => handleDeleteNode(nodeId, event),
-                                    onEdit: handleEditNode,
-                                    updateNodeData: (nodeId, field, value) => {
-                                        setNodes((prevNodes) =>
-                                            prevNodes.map((n) =>
-                                                n.id === nodeId ? { ...n, data: { ...n.data, [field]: value } } : n
-                                            )
-                                        );
-                                    },
-                                    onEditStateChange: (nodeId, isEditing) => {
-                                        setEditingNodes(prev => ({ ...prev, [nodeId]: isEditing }));
-                                    },
-                                    getStatusColor, // Pass the getStatusColor function
+                                ...node.data,
+                                isEditMode,
+                                users,
+                                roles,
+                                onDelete: (nodeId, event) => handleDeleteNode(nodeId, event),
+                                onEdit: handleEditNode,
+                                updateNodeData: (nodeId, updatedData) => {
+                                    setNodes((prevNodes) =>
+                                    prevNodes.map((n) =>
+                                        n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
+                                    )
+                                    );
+                                },
+                                onSaveNode: (nodeId) => handleSaveNode(nodeId),
+                                onEditStateChange: (nodeId, isEditing) => {
+                                    setEditingNodes((prev) => ({
+                                    ...prev,
+                                    [nodeId]: isEditing,
+                                    }));
+                                },
+                                getStatusColor,
+                                role: node.data.role || "Unassigned",
+                                assignedUser: node.data.assignedUser || "Unassigned",
+                                assignedUsername: node.data.assignedUsername || "Unassigned",
                                 }
                             }))}
-                            edges={edges
-                                .filter(edge => nodes.find(node => node.id === edge.source) && nodes.find(node => node.id === edge.target)) // ✅ Ensure edges reference existing nodes
-                                .map(edge => ({
-                                  ...edge,
-                                  animated: isEditMode, // ✅ Animate only in edit mode
-                                  deletable: isEditMode, // ✅ Prevent deletion outside edit mode
-                                  selectable: isEditMode, // ✅ Ensure edges can't be selected outside edit mode
-                                  style: {
-                                    stroke: "#778DA9",
-                                    strokeWidth: 2,
-                                    opacity: 1, // ✅ Ensure edges remain visible outside edit mode
-                                  }
-                                }))}                                                                                                                                           
+                            edges={edges.filter(edge => 
+                                nodes.find(node => node.id === edge.source) &&
+                                nodes.find(node => node.id === edge.target)
+                            ).map(edge => ({
+                                ...edge,
+                                animated: isEditMode,
+                                deletable: isEditMode,
+                                selectable: isEditMode,
+                                style: {
+                                stroke: "#778DA9",
+                                strokeWidth: 2,
+                                opacity: 1,
+                                }
+                            }))}
                             onNodesChange={isEditMode ? onNodesChange : undefined}
                             onEdgesChange={isEditMode ? onEdgesChange : undefined}
                             onConnect={isEditMode ? onConnect : undefined}
-                            onEdgeClick={isEditMode ? onEdgeClick : undefined} // ✅ Allow edge deletion in edit mode
-                            fitView
+                            onEdgeClick={isEditMode ? onEdgeClick : undefined}
                             nodeTypes={nodeTypes}
-                            nodesDraggable={isEditMode} // ✅ Disable node dragging outside of edit mode
-                        >
+                            nodesDraggable={isEditMode}
+                            fitViewOnInit={false}  // 🔥 Prevent auto-fit on load
+                            defaultViewport={{ x: 0, y: 0, zoom: 1 }} // Set your initial viewport settings
+                            >
                             <MiniMap />
                             <Controls />
                             <Background />

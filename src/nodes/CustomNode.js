@@ -1,85 +1,120 @@
-// Inside CustomNode.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Handle, Position } from "reactflow";
+import { updateNode } from "../services/supplyChainApi"; // Import the updateNode function
 
 const CustomNode = ({ data }) => {
-    const [isEditing, setIsEditing] = useState(false); // Local edit state
-    const [validationErrors, setValidationErrors] = useState({}); // Validation error state
+    const [isEditing, setIsEditing] = useState(false);
+    const [localData, setLocalData] = useState({
+        name: data.name || "",
+        role: data.role || "",
+        assignedUser: data.assignedUser || "",
+        assignedUsername: data.assignedUsername || "",
+        status: data.status || "pending",
+    });
+    const [validationErrors, setValidationErrors] = useState({});
+    const [filteredUsers, setFilteredUsers] = useState([]);
 
-    const currentUserId = localStorage.getItem('userId'); // Get the current logged-in user's ID
+    const currentUserId = localStorage.getItem('userId');
+
+    useEffect(() => {
+        // Sync local state when data changes (e.g., on save from parent)
+        setLocalData({
+            name: data.name || "",
+            role: data.role || "",
+            assignedUser: data.assignedUser || "",
+            assignedUsername: data.assignedUsername || "",
+            status: data.status || "pending",
+        });
+    }, [data.name, data.role, data.assignedUser, data.assignedUsername, data.status]);
+
+    // This useEffect will run when the component mounts and when localData.role or data.users changes
+    useEffect(() => {
+        // Show all users if role is unassigned or placeholder
+        if (!localData.role || localData.role === "Unassigned" || localData.role === "Select Role") {
+            setFilteredUsers(data.users);
+        } else {
+            // Filter users based on the selected role
+            setFilteredUsers(data.users.filter(user => user.role === localData.role));
+        }
+    }, [localData.role, data.users]);      
 
     const validateFields = () => {
         const errors = {};
-        if (!data.name) errors.name = 'Name is required.';
-        if (!data.role) errors.role = 'Role is required.';
-        if (!data.assignedUser) errors.assignedUser = 'Assigned user is required.';
+        if (!localData.name) errors.name = 'Name is required.';
+        if (!localData.role) errors.role = 'Role is required.';
+        if (!localData.assignedUser) errors.assignedUser = 'Assigned user is required.';
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
     };
 
-    // Function to handle user selection
+    // Update local state instead of parent state
+    const handleInputChange = (field, value) => {
+        setLocalData((prev) => ({ ...prev, [field]: value }));
+
+        if (field === "role") {
+            const filteredUsers = data.users.filter(user => user.role === value);
+            setFilteredUsers(filteredUsers);
+            if (filteredUsers.length === 1) {
+                setLocalData((prev) => ({
+                    ...prev,
+                    assignedUser: filteredUsers[0].id,
+                    assignedUsername: filteredUsers[0].username,
+                }));
+            } else {
+                setLocalData((prev) => ({
+                    ...prev,
+                    assignedUser: "",
+                    assignedUsername: "",
+                }));
+            }
+        }
+    };
+
     const handleUserChange = (e) => {
         const selectedUsername = e.target.value;
         const selectedUser = data.users.find(user => user.username === selectedUsername);
     
         if (selectedUser) {
-            data.updateNodeData(data.id, "assignedUser", selectedUser.id); // Store user ID
-            data.updateNodeData(data.id, "assignedUsername", selectedUser.username); // Store username for display
-            data.updateNodeData(data.id, "role", selectedUser.role); // Auto-update role
+            setLocalData((prev) => ({
+                ...prev,
+                assignedUser: selectedUser.id,
+                assignedUsername: selectedUser.username,
+                role: selectedUser.role, // Auto-update role
+            }));
+    
+            // ✅ Update the parent state immediately to trigger the highlight
+            data.updateNodeData(data.id, {
+                assignedUser: selectedUser.id,
+                assignedUsername: selectedUser.username,
+                role: selectedUser.role,
+            });
         }
-        validateFields(); // Validate fields after user change
-    };
+    };    
 
-    // Function to handle role selection
-    const handleRoleChange = (e) => {
-        const selectedRole = e.target.value;
-        data.updateNodeData(data.id, "role", selectedRole);
-
-        // Reset user selection if their role doesn't match
-        if (data.assignedUser) {
-            const selectedUser = data.users.find(user => user.username === data.assignedUsername);
-            if (!selectedUser || selectedUser.role !== selectedRole) {
-                data.updateNodeData(data.id, "assignedUser", ""); // Clear user selection
-                data.updateNodeData(data.id, "assignedUsername", ""); // Clear username display
-            }
-        }
-        validateFields(); // Validate fields after role change
-    };
-
-    // Function to handle name change
-    const handleNameChange = (e) => {
-        const newName = e.target.value;
-        data.updateNodeData(data.id, "name", newName);
-        data.updateNodeData(data.id, "label", newName); // Update the label as well
-        validateFields(); // Validate fields after name change
-    };
-
-    // Function to handle status change
-    const handleStatusChange = (e) => {
-        const newStatus = e.target.value;
-        data.updateNodeData(data.id, "status", newStatus);
-    };
-
-    // Filter users based on selected role
-    const filteredUsers = data.role
-        ? data.users.filter(user => user.role === data.role) // Show only users matching the role
-        : data.users; // Show all users if no role is selected
-
-    // Function to handle save button click
-    const handleSaveClick = (e) => {
+    const handleSaveClick = async (e) => {
         e.stopPropagation();
         if (!validateFields()) {
+            alert("All fields must be filled.");
             return;
         }
-        setIsEditing(false);
-        data.onEditStateChange(data.id, false); // Notify parent component
-        setValidationErrors({}); // Clear validation errors
+
+        try {
+            // Send update node request to backend
+            const updatedNode = await updateNode(data.supplyChainId, data.id, localData);
+
+            // Update parent state after clicking Save
+            data.updateNodeData(data.id, updatedNode);
+
+            setIsEditing(false);
+            data.onEditStateChange(data.id, false);
+            setValidationErrors({});
+        } catch (error) {
+            console.error("Error updating node:", error);
+        }
     };
 
-    // Determine if the node is assigned to the current logged-in user
-    const isAssignedToCurrentUser = data.assignedUser === Number(currentUserId);
+    const isAssignedToCurrentUser = localData.assignedUser === Number(currentUserId);
 
-    // Define the glowing border style
     const borderStyle = isAssignedToCurrentUser
         ? {
             border: '2px solid #00FF00',
@@ -89,40 +124,32 @@ const CustomNode = ({ data }) => {
             border: '2px solid #415A77',
         };
 
-    // Define the background color based on status
     const statusColor = {
         pending: 'bg-blue-500',
         processing: 'bg-yellow-500',
         done: 'bg-green-500',
-    }[data.status] || 'bg-gray-500';
+    }[localData.status] || 'bg-gray-500';
+
+    const toSentenceCase = (str) => {
+        return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    };
 
     return (
         <div
-            className={`custom-node ${statusColor} rounded-lg shadow-md relative w-[200px]`}
+            className={`custom-node ${statusColor} rounded-lg shadow-md relative w-[200px] ${isEditing ? 'expanded' : ''}`}
             style={borderStyle}
         >
-            {/* Always render handles but hide them outside edit mode */}
-            <Handle
-                id="left"
-                type="target"
-                position={Position.Left}
-                className={`!bg-[#778DA9] ${data.isEditMode ? "opacity-100" : "opacity-0"}`}
-            />
-            <Handle
-                id="right"
-                type="source"
-                position={Position.Right}
-                className={`!bg-[#778DA9] ${data.isEditMode ? "opacity-100" : "opacity-0"}`}
-            />
+            <Handle id="left" type="target" position={Position.Left} className={`!bg-[#778DA9] ${data.isEditMode ? "opacity-100" : "opacity-0"}`} />
+            <Handle id="right" type="source" position={Position.Right} className={`!bg-[#778DA9] ${data.isEditMode ? "opacity-100" : "opacity-0"}`} />
 
-            {/* Header with Delete Button */}
             <div className="bg-[#415A77] text-white font-bold p-2 flex justify-between items-center rounded-t-lg">
-                <span>{data.label}</span>
+                <span>{localData.name || "Unnamed Node"}</span>
                 {data.isEditMode && (
                     <button
                         className="w-6 h-6 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-md flex items-center justify-center shadow-md transition"
                         onClick={(e) => {
-                            data.onDelete(data.id, e);
+                            e.stopPropagation();
+                            data.onDelete(String(data.id), e);
                         }}
                     >
                         ✖
@@ -130,76 +157,64 @@ const CustomNode = ({ data }) => {
                 )}
             </div>
 
-            {/* Node Content */}
             <div className="p-2 text-left bg-[#1B263B] text-gray-300 text-sm rounded-b-lg">
                 {isEditing && (
                     <div className="py-1 border-b border-[#415A77]">
-                        <strong>Name:</strong>
+                        <strong>Name: </strong>
                         <input
                             type="text"
-                            value={data.name}
-                            onChange={handleNameChange}
+                            value={localData.name}
+                            onChange={(e) => handleInputChange("name", e.target.value)}
                             className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
                         />
                         {validationErrors.name && <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>}
                     </div>
                 )}
 
-                {/* Role Dropdown */}
                 <div className="py-1 border-b border-[#415A77]">
                     <strong>Role: </strong>
                     {isEditing ? (
-                        <>
-                            <select
-                                value={data.role || ""}
-                                onChange={handleRoleChange}
-                                className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
-                            >
-                                <option value="">Select Role</option>
-                                {data.roles.map((role) => (
-                                    <option key={role} value={role}>
-                                        {role}
-                                    </option>
-                                ))}
-                            </select>
-                            {validationErrors.role && <p className="text-red-500 text-xs mt-1">{validationErrors.role}</p>}
-                        </>
+                        <select
+                            value={localData.role || ""}
+                            onChange={(e) => handleInputChange("role", e.target.value)}
+                            className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
+                        >
+                            <option value="">Select Role</option>
+                            {data.roles.map((role) => (
+                                <option key={role} value={role}>{toSentenceCase(role)}</option>
+                            ))}
+                        </select>
                     ) : (
-                        <span>{data.role}</span>
+                        <span>{toSentenceCase(localData.role)}</span>
                     )}
                 </div>
 
-                {/* User Dropdown */}
                 <div className="py-1 border-b border-[#415A77]">
                     <strong>User: </strong>
                     {isEditing ? (
-                        <>
-                            <select
-                                value={data.assignedUsername || ""}
-                                onChange={handleUserChange}
-                                className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
-                            >
-                                <option value="">Select User</option>
-                                {filteredUsers.map((user) => (
-                                    <option key={user.id} value={user.username}>
-                                        {user.username}
-                                    </option>
-                                ))}
-                            </select>
-                            {validationErrors.assignedUser && <p className="text-red-500 text-xs mt-1">{validationErrors.assignedUser}</p>}
-                        </>
+                        <select
+                            value={localData.assignedUsername || ""}
+                            onChange={handleUserChange}
+                            className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
+                        >
+                            <option value="">Select User</option>
+                            {filteredUsers.map((user) => (
+                                <option key={user.id} value={user.username}>
+                                    {user.username}
+                                </option>
+                            ))}
+                        </select>
                     ) : (
-                        <span>{data.assignedUsername}</span>
+                        <span>{localData.assignedUsername}</span>
                     )}
                 </div>
 
-                {/* Status Dropdown */}
                 <div className="py-1">
                     <strong>Status: </strong>
                     {isEditing ? (
                         <select
-                            value={data.status || "pending"}
-                            onChange={handleStatusChange}
+                            value={localData.status || "pending"}
+                            onChange={(e) => handleInputChange("status", e.target.value)}
                             className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
                         >
                             <option value="pending">Pending</option>
@@ -207,26 +222,21 @@ const CustomNode = ({ data }) => {
                             <option value="done">Done</option>
                         </select>
                     ) : (
-                        <span className={data.getStatusColor(data.status)}>
-                            {data.status}
-                        </span>
+                        <span className={data.getStatusColor(localData.status)}>{toSentenceCase(localData.status)}</span>
                     )}
                 </div>
             </div>
 
-            {/* Footer - Full-width Edit Button */}
             {data.isEditMode && (
                 <button
-                    className={`w-full py-2 font-semibold rounded-b-lg flex items-center justify-center shadow-md transition ${
-                        Object.keys(validationErrors).length > 0 ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"
-                    } text-white`}
+                    className={`w-full py-2 font-semibold rounded-b-lg flex items-center justify-center shadow-md transition ${Object.keys(validationErrors).length > 0 ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"} text-white`}
                     onClick={(e) => {
                         if (isEditing) {
                             handleSaveClick(e);
                         } else {
                             e.stopPropagation();
-                            setIsEditing(true); // Toggle edit mode per node
-                            data.onEditStateChange(data.id, true); // Notify parent component
+                            setIsEditing(true);
+                            data.onEditStateChange(data.id, true);
                         }
                     }}
                 >
