@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Handle, Position } from "reactflow";
-import { updateNode } from "../services/supplyChainApi"; // Import the updateNode function
+import { updateNode } from "../services/supplyChainApi";
 
 // Define the getRandomColor function
 const getRandomColor = () => {
@@ -42,10 +42,10 @@ const CustomNode = ({ data }) => {
     useEffect(() => {
         // Show all users if role is unassigned or placeholder
         if (!localData.role || localData.role === "Unassigned" || localData.role === "Select Role") {
-            setFilteredUsers(data.users);
+            setFilteredUsers(data.users || []);
         } else {
             // Filter users based on the selected role
-            setFilteredUsers(data.users.filter(user => user.role === localData.role));
+            setFilteredUsers((data.users || []).filter(user => user.role === localData.role));
         }
     }, [localData.role, data.users]);      
 
@@ -63,7 +63,7 @@ const CustomNode = ({ data }) => {
         setLocalData((prev) => ({ ...prev, [field]: value }));
 
         if (field === "role") {
-            const filteredUsers = data.users.filter(user => user.role === value);
+            const filteredUsers = (data.users || []).filter(user => user.role === value);
             setFilteredUsers(filteredUsers);
             if (filteredUsers.length === 1) {
                 setLocalData((prev) => ({
@@ -83,7 +83,7 @@ const CustomNode = ({ data }) => {
 
     const handleUserChange = (e) => {
         const selectedUsername = e.target.value;
-        const selectedUser = data.users.find(user => user.username === selectedUsername);
+        const selectedUser = (data.users || []).find(user => user.username === selectedUsername);
     
         if (selectedUser) {
             setLocalData((prev) => ({
@@ -108,21 +108,25 @@ const CustomNode = ({ data }) => {
             alert("All fields must be filled.");
             return;
         }
-
+    
         try {
-            // Send update node request to backend
-            const updatedNode = await updateNode(data.supplyChainId, data.id, localData);
-
+            // Send update node request to backend with x and y positions
+            const updatedNode = await updateNode(data.supplyChainId, data.id, {
+                ...localData,
+                x: data.x, // Add x position from parent node data
+                y: data.y, // Add y position from parent node data
+            });
+    
             // Update parent state after clicking Save
             data.updateNodeData(data.id, updatedNode);
-
+    
             setIsEditing(false);
             data.onEditStateChange(data.id, false);
             setValidationErrors({});
         } catch (error) {
             console.error("Error updating node:", error);
         }
-    };
+    };    
 
     const isAssignedToCurrentUser = localData.assignedUser === Number(currentUserId);
 
@@ -144,6 +148,42 @@ const CustomNode = ({ data }) => {
     const toSentenceCase = (str) => {
         return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
     };
+
+    // Ensure edges exist and are in an array format
+    const edges = Array.isArray(data.edges) ? data.edges : [];
+
+    // Debugging: Log edges to ensure they are being passed correctly
+    console.log(`Node ${data.id} edges:`, edges);
+
+    // Check if the node has at least one incoming edge (it is a target node)
+    const isTargetNode = edges.some(edge => 
+        edge.target === String(data.id) || edge.target === data.id
+    );
+
+    // Check if the node has at least one outgoing edge (it connects to another node)
+    const hasOutgoingEdges = edges.some(edge => 
+        edge.source === String(data.id) || edge.source === data.id
+    );
+
+    // Check if this is the first node (has no incoming edges)
+    const isFirstNode = !isTargetNode;
+
+    // Allow status change if:
+    // - The node is the first node AND has at least one outgoing edge
+    // - OR the node has an incoming edge (is a target) AND the previous node's status is "done"
+    const canChangeStatus = (isFirstNode && hasOutgoingEdges) || (isTargetNode && data.previousNodeStatus === "done");
+
+    // Debug logging with more context
+    console.log(`Node ${data.id} (${data.name}) status check:`, {
+        id: data.id,
+        isFirstNode,
+        isTargetNode,
+        hasOutgoingEdges,
+        previousNodeStatus: data.previousNodeStatus,
+        canChangeStatus,
+        currentStatus: localData.status,
+        edgesCount: edges.length
+    });
 
     return (
         <div
@@ -200,7 +240,7 @@ const CustomNode = ({ data }) => {
                             className="w-full p-1 mt-1 bg-[#0D1B2A] text-white border border-[#415A77] rounded"
                         >
                             <option value="">Select Role</option>
-                            {data.roles.map((role) => (
+                            {(data.roles || []).map((role) => (
                                 <option key={role} value={role}>{toSentenceCase(role)}</option>
                             ))}
                         </select>
@@ -236,11 +276,12 @@ const CustomNode = ({ data }) => {
                             value={localData.status || "pending"}
                             onChange={(e) => handleInputChange("status", e.target.value)}
                             className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
+                            disabled={!canChangeStatus || (localData.status === "done")}
                         >
                             <option value="pending">Pending</option>
                             <option value="processing">Processing</option>
                             <option value="done">Done</option>
-                        </select>
+                        </select>        
                     ) : (
                         <span className={data.getStatusColor(localData.status)}>{toSentenceCase(localData.status)}</span>
                     )}

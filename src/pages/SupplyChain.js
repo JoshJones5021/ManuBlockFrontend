@@ -99,20 +99,30 @@ const SupplyChain = () => {
                             isEditMode,
                             onDelete: handleDeleteNode,
                             onEdit: handleEditNode,
+                            previousNodeStatus: "done", // Default to "done" for starting nodes
+                            edges: data.edges,
                         }
                     }));
     
                     // Calculate node positions
                     const nodePositions = calculateNodePositions(initialNodes, data.edges);
     
-                    // Update nodes with positions
-                    const nodesWithPositions = initialNodes.map(node => ({
-                        ...node,
-                        data: {
-                            ...node.data,
-                            position: nodePositions[node.id]
-                        }
-                    }));
+                    // Update nodes with positions and previous node status
+                    const nodesWithPositions = initialNodes.map(node => {
+                        const incomingEdges = data.edges.filter(edge => edge.target === node.id);
+                        const previousNodeStatus = incomingEdges.length > 0
+                            ? initialNodes.find(n => n.id === incomingEdges[0].source).data.status
+                            : "done"; // Default to "done" for starting nodes
+    
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                position: nodePositions[node.id],
+                                previousNodeStatus,
+                            }
+                        };
+                    });
     
                     setNodes(nodesWithPositions);
     
@@ -198,6 +208,7 @@ const SupplyChain = () => {
                     }));
                 },
                 getStatusColor,
+                previousNodeStatus: "done", // Default to "done" for new nodes
             },
         };
     
@@ -238,6 +249,33 @@ const SupplyChain = () => {
         event.dataTransfer.setData("nodeType", nodeType);
     };
 
+    const onNodeDragStop = (event, node) => {
+        setNodes((prevNodes) =>
+            prevNodes.map((n) =>
+                n.id === node.id
+                    ? {
+                          ...n,
+                          position: { x: node.position.x, y: node.position.y },
+                          data: {
+                              ...n.data,
+                              x: node.position.x,
+                              y: node.position.y,
+                          },
+                      }
+                    : n
+            )
+        );
+    };    
+
+    const hasNodesWithoutEdges = () => {
+        return nodes.some(node => {
+            const nodeId = node.id;
+            const hasIncomingEdge = edges.some(edge => edge.target === nodeId);
+            const hasOutgoingEdge = edges.some(edge => edge.source === nodeId);
+            return !hasIncomingEdge && !hasOutgoingEdge;
+        });
+    };
+
     // Handle Node Click (Open Modal)
     const onNodeClick = (event, node) => {
         if (isEditMode) {
@@ -249,7 +287,7 @@ const SupplyChain = () => {
     // Handle Modal Save
     const handleSaveNode = async (nodeId) => {
         const nodeToSave = nodes.find((node) => node.id === nodeId);
-
+    
         if (
             !nodeToSave.data.name ||
             !nodeToSave.data.role ||
@@ -258,11 +296,11 @@ const SupplyChain = () => {
             setValidationError("All fields must be filled.");
             return;
         }
-
+    
         try {
             // Use the backend-generated node ID for the update request
             const backendNodeId = nodeToSave.data.id;
-
+    
             // Save changes to the backend
             await updateNode(nodeToSave.data.supplyChainId, backendNodeId, {
                 name: nodeToSave.data.name,
@@ -272,19 +310,35 @@ const SupplyChain = () => {
                 x: nodeToSave.position.x,
                 y: nodeToSave.position.y,
             });
-
+    
             // Update local state
-            setNodes((prevNodes) =>
-                prevNodes.map((node) =>
+            setNodes((prevNodes) => {
+                const updatedNodes = prevNodes.map((node) =>
                     node.id === nodeId ? { ...node, data: { ...nodeToSave.data } } : node
-                )
-            );
-
+                );
+    
+                // If the current node's status is "done", update the previousNodeStatus of the next nodes
+                if (nodeToSave.data.status === "done") {
+                    const nextNodes = edges
+                        .filter((edge) => edge.source === nodeId)
+                        .map((edge) => edge.target);
+    
+                    nextNodes.forEach((nextNodeId) => {
+                        const nextNode = updatedNodes.find((node) => node.id === nextNodeId);
+                        if (nextNode) {
+                            nextNode.data.previousNodeStatus = "done";
+                        }
+                    });
+                }
+    
+                return updatedNodes;
+            });
+    
             setEditingNodes((prev) => ({
                 ...prev,
                 [nodeId]: false,
             }));
-
+    
             setValidationError("");
         } catch (error) {
             console.error("Error saving node:", error);
@@ -420,6 +474,11 @@ const SupplyChain = () => {
 
     // Save Supply Chain
     const handleSaveSupplyChain = async () => {
+        if (hasNodesWithoutEdges()) {
+            alert("All nodes must be connected with edges before saving.");
+            return;
+        }
+    
         try {
             // 🔄 Fetch the latest nodes from the backend before saving
             const latestNodesResponse = await fetch(`http://localhost:8080/api/supply-chains/${id}/nodes`, {
@@ -516,8 +575,8 @@ const SupplyChain = () => {
                         onClick={() => isEditMode ? handleSaveSupplyChain() : setIsEditMode(true)}
                         className={`px-4 py-2 rounded transition ${
                             isEditMode ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"
-                        } ${Object.values(editingNodes).some(isEditing => isEditing) ? "opacity-50 cursor-not-allowed" : ""}`} // Add faded effect and disable cursor when disabled
-                        disabled={Object.values(editingNodes).some(isEditing => isEditing)} // Disable button when any node is being edited
+                        } ${Object.values(editingNodes).some(isEditing => isEditing) || hasNodesWithoutEdges() ? "opacity-50 cursor-not-allowed" : ""}`} // Add faded effect and disable cursor when disabled
+                        disabled={Object.values(editingNodes).some(isEditing => isEditing) || hasNodesWithoutEdges()} // Disable button when any node is being edited or if there are nodes without edges
                     >
                         {isEditMode ? "Save & Exit Edit Mode" : "Enter Edit Mode"}
                     </button>
@@ -551,6 +610,7 @@ const SupplyChain = () => {
                             nodes={nodes.map(node => ({
                                 ...node,
                                 type: "customNode",
+                                draggable: !!editingNodes[node.id], // Only the node in edit mode is draggable
                                 data: {
                                     ...node.data,
                                     isEditMode,
@@ -597,14 +657,15 @@ const SupplyChain = () => {
                             onConnect={isEditMode ? onConnect : undefined}
                             onEdgeClick={isEditMode ? onEdgeClick : undefined}
                             nodeTypes={nodeTypes}
-                            nodesDraggable={isEditMode}
-                            fitViewOnInit={false}  // 🔥 Prevent auto-fit on load
+                            nodesDraggable={false} // Disable global dragging
+                            onNodeDragStop={onNodeDragStop}
                             defaultViewport={{ x: 0, y: 0, zoom: 1 }} // Set your initial viewport settings
                         >
                             <MiniMap />
                             <Controls />
                             <Background />
                         </ReactFlow>
+
                     </div>
                 </div>
             </div>
