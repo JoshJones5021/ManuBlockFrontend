@@ -5,6 +5,7 @@ import Navbar from '../components/navbar/NavBar';
 import Sidebar from '../components/sidebar/Sidebar';
 import Pagination from '../components/Pagination';
 import { getAllSupplyChains, createSupplyChain, deleteSupplyChain } from '../services/supplyChainApi'; // Import API functions
+import config from '../components/common/config';
 
 const Dashboard = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -32,14 +33,20 @@ const Dashboard = () => {
                 setFilteredChains(fetchedChains); // Initialize filtered chains
 
                 // Fetch users and map user IDs to usernames
-                const authToken = localStorage.getItem("token");
+                const authToken = localStorage.getItem(config.AUTH.TOKEN_KEY);
                 const headers = {
                     "Authorization": `Bearer ${authToken}`,
                     "Content-Type": "application/json"
                 };
 
-                const usersResponse = await fetch("http://localhost:8080/api/users/", { headers });
+                const usersResponse = await fetch(`${config.API.USERS}/`, { headers });
                 if (!usersResponse.ok) {
+                    if (usersResponse.status === 401) {
+                        // Handle expired token
+                        localStorage.removeItem(config.AUTH.TOKEN_KEY);
+                        navigate('/login');
+                        throw new Error("Session expired");
+                    }
                     throw new Error("Failed to fetch users");
                 }
 
@@ -52,16 +59,21 @@ const Dashboard = () => {
                 setUserIdToUsername(userIdToUsernameMap);
             } catch (error) {
                 console.error('Error fetching supply chains or users:', error);
+                if (error.message === "Session expired") {
+                    alert("Your session has expired. Please log in again.");
+                } else {
+                    alert("Failed to load dashboard data. Please try again later.");
+                }
             }
         };
 
         fetchSupplyChainsAndUsers();
-    }, []);
+    }, [navigate]);
 
     useEffect(() => {
         const fetchUserData = () => {
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem(config.AUTH.TOKEN_KEY);
                 if (!token) throw new Error('User not logged in');
 
                 const decodedToken = jwtDecode(token);
@@ -98,31 +110,43 @@ const Dashboard = () => {
 
     const handleCreateSupplyChain = async () => {
         if (!newSupplyChain.name.trim() || !newSupplyChain.description.trim()) {
-            alert('Please fill in both fields.');
+            alert('Please fill in both name and description fields.');
             return;
         }
-
+    
         setIsCreating(true);
         try {
-            const userId = localStorage.getItem('userId'); // Get the user ID from local storage
-            const createdChain = await createSupplyChain({ ...newSupplyChain, createdBy: userId }); // Include user ID in the request
+            const userId = localStorage.getItem(config.AUTH.USER_ID_KEY); // Get the user ID
+            const createdChain = await createSupplyChain({ 
+                ...newSupplyChain, 
+                createdBy: parseInt(userId) // Send just the ID as a number, not an object
+            });
+            
             setSupplyChains([...supplyChains, createdChain]);
-            setFilteredChains([...filteredChains, createdChain]); // Update filtered chains
+            setFilteredChains([...filteredChains, createdChain]);
             setIsModalOpen(false);
+            setNewSupplyChain({ name: '', description: '' });
+            alert("Supply chain created successfully!");
         } catch (error) {
             console.error('Error creating supply chain:', error);
+            alert("Failed to create supply chain. Please try again.");
         } finally {
             setIsCreating(false);
         }
     };
 
     const handleDeleteSupplyChain = async (id) => {
+        const confirmDelete = window.confirm("Are you sure you want to delete this supply chain? This action cannot be undone.");
+        if (!confirmDelete) return;
+        
         try {
             await deleteSupplyChain(id);
             setSupplyChains(supplyChains.filter(chain => chain.id !== id));
             setFilteredChains(filteredChains.filter(chain => chain.id !== id));
+            alert("Supply chain deleted successfully!");
         } catch (error) {
             console.error('Error deleting supply chain:', error);
+            alert("Failed to delete supply chain. Please try again.");
         }
     };
 
@@ -203,7 +227,12 @@ const Dashboard = () => {
                                 <p className="text-[#778DA9] mt-2">{chain.description}</p>
                                 <p className="text-[#778DA9] mt-2 text-xs">Created: {formatDateTime(chain.createdAt)}</p>
                                 <p className="text-[#778DA9] mt-1 text-xs">Updated: {formatDateTime(chain.updatedAt)}</p>
-                                <p className="text-[#778DA9] mt-1 text-xs">Created By: {userIdToUsername[chain.createdBy] || chain.createdBy}</p> {/* Display Created By */}
+                                <p className="text-[#778DA9] mt-1 text-xs">Created By: {
+                                    // Check if createdBy is an object
+                                    typeof chain.createdBy === 'object' && chain.createdBy !== null
+                                    ? (chain.createdBy.username || 'Unknown User') // Use username property if available
+                                    : (userIdToUsername[chain.createdBy] || 'Unknown User') // Fall back to ID lookup
+                                }</p>
                                 <button
                                     onClick={() => navigate(`/supply-chain/${chain.id}`)}
                                     className="mt-4 bg-[#415A77] text-white py-2 px-4 rounded hover:bg-[#778DA9] transition duration-300"

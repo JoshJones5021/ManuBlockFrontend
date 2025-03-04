@@ -110,23 +110,35 @@ const CustomNode = ({ data }) => {
         }
     
         try {
-            // Send update node request to backend with x and y positions
-            const updatedNode = await updateNode(data.supplyChainId, data.id, {
-                ...localData,
-                x: data.x, // Add x position from parent node data
-                y: data.y, // Add y position from parent node data
-            });
+            // Format the data for the backend
+            const nodeDataForBackend = {
+                name: localData.name,
+                role: localData.role,
+                x: data.x,
+                y: data.y,
+                status: localData.status,
+                // Format assignedUser based on backend expectations
+                assignedUser: localData.assignedUser ? { id: parseInt(localData.assignedUser) } : null
+            };
     
-            // Update parent state after clicking Save
-            data.updateNodeData(data.id, updatedNode);
+            // Send update node request to backend
+            const updatedNode = await updateNode(data.supplyChainId, data.id, nodeDataForBackend);
+    
+            // Update parent state with response data
+            data.updateNodeData(data.id, {
+                ...updatedNode,
+                // Response contains assignedUserId, not assignedUser object
+                assignedUser: updatedNode.assignedUserId || null
+            });
     
             setIsEditing(false);
             data.onEditStateChange(data.id, false);
             setValidationErrors({});
         } catch (error) {
             console.error("Error updating node:", error);
+            alert("Failed to update node. Please try again.");
         }
-    };    
+    };
 
     const isAssignedToCurrentUser = localData.assignedUser === Number(currentUserId);
 
@@ -152,18 +164,17 @@ const CustomNode = ({ data }) => {
     // Ensure edges exist and are in an array format
     const edges = Array.isArray(data.edges) ? data.edges : [];
 
-    // Debugging: Log edges to ensure they are being passed correctly
-    console.log(`Node ${data.id} edges:`, edges);
-
     // Check if the node has at least one incoming edge (it is a target node)
-    const isTargetNode = edges.some(edge => 
-        edge.target === String(data.id) || edge.target === data.id
-    );
+    const isTargetNode = edges.some(edge => {
+        const edgeTarget = typeof edge.target === 'object' ? edge.target.id : edge.target;
+        return edgeTarget === String(data.id) || edgeTarget === data.id;
+    });
 
     // Check if the node has at least one outgoing edge (it connects to another node)
-    const hasOutgoingEdges = edges.some(edge => 
-        edge.source === String(data.id) || edge.source === data.id
-    );
+    const hasOutgoingEdges = edges.some(edge => {
+        const edgeSource = typeof edge.source === 'object' ? edge.source.id : edge.source;
+        return edgeSource === String(data.id) || edgeSource === data.id;
+    });
 
     // Check if this is the first node (has no incoming edges)
     const isFirstNode = !isTargetNode;
@@ -172,18 +183,6 @@ const CustomNode = ({ data }) => {
     // - The node is the first node AND has at least one outgoing edge
     // - OR the node has an incoming edge (is a target) AND the previous node's status is "done"
     const canChangeStatus = (isFirstNode && hasOutgoingEdges) || (isTargetNode && data.previousNodeStatus === "done");
-
-    // Debug logging with more context
-    console.log(`Node ${data.id} (${data.name}) status check:`, {
-        id: data.id,
-        isFirstNode,
-        isTargetNode,
-        hasOutgoingEdges,
-        previousNodeStatus: data.previousNodeStatus,
-        canChangeStatus,
-        currentStatus: localData.status,
-        edgesCount: edges.length
-    });
 
     return (
         <div

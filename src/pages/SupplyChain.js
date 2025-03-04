@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
     getSupplyChainById,
     createNode,
@@ -7,13 +7,16 @@ import {
     deleteNode,
     createEdge,
     deleteEdge,
-    updateSupplyChain
+    updateSupplyChain,
+    getNodes
   } from "../services/supplyChainApi";  
 import ReactFlow, { MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge, useReactFlow } from "reactflow";
 import "reactflow/dist/style.css";
 import Navbar from "../components/navbar/NavBar";
 import Sidebar from "../components/sidebar/Sidebar";
 import CustomNode from '../nodes/CustomNode';
+import config from '../components/common/config';
+import LoadingOverlay from '../components/LoadingOverlay';
 
 const nodeTypes = {
     customNode: CustomNode, // Ensure CustomNode is used directly
@@ -21,6 +24,7 @@ const nodeTypes = {
 
 const SupplyChain = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [supplyChain, setSupplyChain] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -29,6 +33,7 @@ const SupplyChain = () => {
     const [validationError, setValidationError] = useState('');
     const [users, setUsers] = useState([]);  
     const [roles, setRoles] = useState([]);  
+    const [isSaving, setIsSaving] = useState(false);
 
     // React Flow State
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -52,12 +57,25 @@ const SupplyChain = () => {
                     return;
                 }
                 console.log("✅ Fetched Supply Chain:", data);
+                
+                // Format data for the frontend
+                if (data.nodes) {
+                    // Map assignedUser from backend format to frontend format
+                    data.nodes = data.nodes.map(node => ({
+                        ...node,
+                        // If assignedUser is an object, extract the ID
+                        assignedUser: typeof node.assignedUserId === 'object' && node.assignedUserId !== null 
+                            ? node.assignedUserId.id 
+                            : node.assignedUserId
+                    }));
+                }
+                
                 setSupplyChain(data);
     
                 // ✅ Fetch Users
-                const usersResponse = await fetch("http://localhost:8080/api/users/", {
+                const usersResponse = await fetch(`${config.API.USERS}/`, {
                     headers: {
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Authorization": `Bearer ${localStorage.getItem(config.AUTH.TOKEN_KEY)}`,
                         "Content-Type": "application/json",
                     },
                 });
@@ -71,9 +89,9 @@ const SupplyChain = () => {
                 }, {});
     
                 // ✅ Fetch Roles
-                const rolesResponse = await fetch("http://localhost:8080/api/users/roles", {
+                const rolesResponse = await fetch(`${config.API.USERS}/roles`, {
                     headers: {
-                        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+                        "Authorization": `Bearer ${localStorage.getItem(config.AUTH.TOKEN_KEY)}`,
                         "Content-Type": "application/json",
                     },
                 });
@@ -109,9 +127,13 @@ const SupplyChain = () => {
     
                     // Update nodes with positions and previous node status
                     const nodesWithPositions = initialNodes.map(node => {
-                        const incomingEdges = data.edges.filter(edge => edge.target === node.id);
+                        const incomingEdges = data.edges.filter(edge =>
+                            edge.target && String(edge.target.id) === node.id
+                        );                        
+                        
                         const previousNodeStatus = incomingEdges.length > 0
-                            ? initialNodes.find(n => n.id === incomingEdges[0].source).data.status
+                            ? initialNodes.find(n => 
+                                n.id === String(incomingEdges[0].source.id))?.data.status || "done"
                             : "done"; // Default to "done" for starting nodes
     
                         return {
@@ -134,12 +156,12 @@ const SupplyChain = () => {
                     }
                 }
     
-                // ✅ Set Edges
+                // ✅ Set Edges - handle the backend format conversion
                 if (data.edges) {
                     setEdges(data.edges.map((edge) => ({
                         id: `${edge.id}`,
-                        source: `${edge.source}`,
-                        target: `${edge.target}`,
+                        source: `${edge.source.id}`,
+                        target: `${edge.target.id}`,
                         sourceHandle: edge.sourceHandle || "right",
                         targetHandle: edge.targetHandle || "left",
                         animated: edge.animated ?? true,
@@ -149,13 +171,21 @@ const SupplyChain = () => {
     
             } catch (err) {
                 console.error("❌ Error fetching supply chain or users/roles:", err);
+                // Add better error handling
+                if (err.response && err.response.status === 401) {
+                    alert("Your session has expired. Please log in again.");
+                    localStorage.removeItem(config.AUTH.TOKEN_KEY);
+                    navigate('/login');
+                } else {
+                    alert("Failed to load supply chain data. Please try again later.");
+                }
             } finally {
                 setLoading(false);
             }
         };
     
         fetchSupplyChainAndUsers();
-    }, [id]);
+    }, [id, isEditMode, navigate]);
 
     // Handle Node Drop
     const onDrop = async (event) => {
@@ -175,72 +205,59 @@ const SupplyChain = () => {
             y: event.clientY - reactFlowBounds.top,
         };
     
-        const newNode = {
-            id: null, // Set id to null for the POST request
-            type: "customNode",
-            position,
-            data: {
-                name: "Unnamed Node",
-                role: "",
-                assignedUser: "",
-                assignedUsername: "",
-                status: "pending",
-                supplyChainId: id, // Include supplyChainId
-                x: position.x, // Include x position
-                y: position.y, // Include y position
-                isEditMode,
-                users, // Pass users to the new node
-                roles, // Pass roles to the new node
-                onDelete: handleDeleteNode,
-                onEdit: handleEditNode,
-                updateNodeData: (nodeId, updatedData) => {
-                    setNodes((prevNodes) =>
-                        prevNodes.map((n) =>
-                            n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
-                        )
-                    );
-                },
-                onSaveNode: (nodeId) => handleSaveNode(nodeId),
-                onEditStateChange: (nodeId, isEditing) => {
-                    setEditingNodes((prev) => ({
-                        ...prev,
-                        [nodeId]: isEditing,
-                    }));
-                },
-                getStatusColor,
-                previousNodeStatus: "done", // Default to "done" for new nodes
-            },
+        const newNodeData = {
+            name: "Unnamed Node",
+            role: "CUSTOMER", // Default role
+            assignedUserId: parseInt(localStorage.getItem(config.AUTH.USER_ID_KEY)) || null,
+            supplyChainId: id,
+            x: position.x,
+            y: position.y,
+            status: "pending",
         };
     
-        // Send node creation request to backend
         try {
-            const createdNode = await createNode(id, {
-                name: newNode.data.name,
-                role: newNode.data.role,
-                assignedUser: newNode.data.assignedUser,
-                supplyChainId: newNode.data.supplyChainId,
-                x: newNode.position.x,
-                y: newNode.position.y,
-                status: newNode.data.status,
-            });
-            newNode.id = createdNode.id; // Assign backend-generated ID
-            newNode.data.id = createdNode.id; // Assign backend-generated ID to data
+            // Send node creation request to backend
+            const createdNode = await createNode(id, newNodeData);
+            
+            // Store the complete node data in React Flow format
             setNodes((nds) => [
                 ...nds,
                 {
-                    ...newNode,
-                    id: createdNode.id.toString(), // Ensure the ID is a string
-                    position: { x: createdNode.x, y: createdNode.y }, // Use the position from the backend
+                    id: createdNode.id.toString(),
+                    type: "customNode",
+                    position: { x: createdNode.x, y: createdNode.y },
                     data: {
-                        ...newNode.data,
+                        ...createdNode, // Include the complete node data from response
                         id: createdNode.id,
-                        x: createdNode.x,
-                        y: createdNode.y,
+                        label: createdNode.name,
+                        supplyChainId: id,
+                        isEditMode,
+                        onDelete: handleDeleteNode,
+                        onEdit: handleEditNode,
+                        users,
+                        roles,
+                        updateNodeData: (nodeId, updatedData) => {
+                            setNodes((prevNodes) =>
+                                prevNodes.map((n) =>
+                                    n.id === nodeId ? { ...n, data: { ...n.data, ...updatedData } } : n
+                                )
+                            );
+                        },
+                        onSaveNode: (nodeId) => handleSaveNode(nodeId),
+                        onEditStateChange: (nodeId, isEditing) => {
+                            setEditingNodes((prev) => ({
+                                ...prev,
+                                [nodeId]: isEditing,
+                            }));
+                        },
+                        getStatusColor,
+                        previousNodeStatus: "done",
                     },
                 },
             ]);
         } catch (error) {
             console.error("Error creating node:", error);
+            alert("Failed to create node. Please try again.");
         }
     };
 
@@ -249,23 +266,40 @@ const SupplyChain = () => {
         event.dataTransfer.setData("nodeType", nodeType);
     };
 
-    const onNodeDragStop = (event, node) => {
+    const onNodeDragStop = async (event, node) => {
         setNodes((prevNodes) =>
             prevNodes.map((n) =>
                 n.id === node.id
                     ? {
-                          ...n,
-                          position: { x: node.position.x, y: node.position.y },
-                          data: {
-                              ...n.data,
-                              x: node.position.x,
-                              y: node.position.y,
-                          },
-                      }
+                        ...n,
+                        position: { x: node.position.x, y: node.position.y },
+                        data: {
+                            ...n.data,
+                            x: node.position.x,
+                            y: node.position.y,
+                        },
+                    }
                     : n
             )
         );
-    };    
+    
+        // Update node position in backend
+        try {
+            const nodeData = nodes.find(n => n.id === node.id)?.data;
+            if (nodeData) {
+                await updateNode(id, nodeData.id, {
+                    x: node.position.x,
+                    y: node.position.y,
+                    name: nodeData.name,
+                    role: nodeData.role,
+                    status: nodeData.status,
+                    assignedUser: nodeData.assignedUser ? { id: parseInt(nodeData.assignedUser) } : null
+                });
+            }
+        } catch (error) {
+            console.error("Error updating node position:", error);
+        }
+    };  
 
     const hasNodesWithoutEdges = () => {
         return nodes.some(node => {
@@ -301,20 +335,35 @@ const SupplyChain = () => {
             // Use the backend-generated node ID for the update request
             const backendNodeId = nodeToSave.data.id;
     
-            // Save changes to the backend
-            await updateNode(nodeToSave.data.supplyChainId, backendNodeId, {
+            // Format the data for the backend
+            const nodeDataForBackend = {
                 name: nodeToSave.data.name,
                 role: nodeToSave.data.role,
-                assignedUser: nodeToSave.data.assignedUser,
+                assignedUser: nodeToSave.data.assignedUser ? 
+                    { id: parseInt(nodeToSave.data.assignedUser) } : null,
                 status: nodeToSave.data.status,
                 x: nodeToSave.position.x,
                 y: nodeToSave.position.y,
-            });
+            };
+    
+            // Save changes to the backend
+            const updatedNode = await updateNode(
+                nodeToSave.data.supplyChainId, 
+                backendNodeId, 
+                nodeDataForBackend
+            );
     
             // Update local state
             setNodes((prevNodes) => {
                 const updatedNodes = prevNodes.map((node) =>
-                    node.id === nodeId ? { ...node, data: { ...nodeToSave.data } } : node
+                    node.id === nodeId ? { 
+                        ...node, 
+                        data: { 
+                            ...nodeToSave.data,
+                            // Ensure the assignedUser is in the correct format for frontend
+                            assignedUser: updatedNode.assignedUserID || updatedNode.assignedUserId || null
+                        } 
+                    } : node
                 );
     
                 // If the current node's status is "done", update the previousNodeStatus of the next nodes
@@ -342,6 +391,7 @@ const SupplyChain = () => {
             setValidationError("");
         } catch (error) {
             console.error("Error saving node:", error);
+            alert("Failed to save node changes. Please try again.");
         }
     };
 
@@ -404,9 +454,22 @@ const SupplyChain = () => {
     const onConnect = useCallback(
         async (params) => {
             if (isEditMode) {
+                // Add this data transformation
+                const sourceNode = nodes.find(node => node.id === params.source);
+                const targetNode = nodes.find(node => node.id === params.target);
+                
+                if (!sourceNode || !targetNode) {
+                    console.error("Source or target node not found");
+                    return;
+                }
+                
                 const newEdge = {
-                    source: params.source,
-                    target: params.target,
+                    source: {
+                        id: parseInt(params.source)
+                    },
+                    target: {
+                        id: parseInt(params.target)
+                    },
                     sourceHandle: params.sourceHandle || "right",
                     targetHandle: params.targetHandle || "left",
                     animated: true,
@@ -414,13 +477,18 @@ const SupplyChain = () => {
 
                 try {
                     const createdEdge = await createEdge(id, newEdge);
-                    setEdges((eds) => [...eds, { ...newEdge, id: createdEdge.id }]);
+                    setEdges((eds) => [...eds, { 
+                        ...params,
+                        id: createdEdge.id.toString(),
+                        animated: true
+                    }]);
                 } catch (error) {
                     console.error("Error creating edge:", error);
+                    alert("Failed to create connection between nodes");
                 }
             }
         },
-        [id, isEditMode, setEdges]
+        [id, isEditMode, nodes, setEdges]
     ); 
     
     const onEdgeClick = async (event, edge) => {
@@ -449,12 +517,23 @@ const SupplyChain = () => {
     
         // Populate node dependencies based on edges
         edges.forEach(edge => {
-            nodeDependencies[edge.source].outgoing.push(edge.target);
-            nodeDependencies[edge.target].incoming.push(edge.source);
+            const sourceId = typeof edge.source === 'object' ? edge.source.id : edge.source;
+            const targetId = typeof edge.target === 'object' ? edge.target.id : edge.target;
+            
+            // Check if the IDs exist in nodeDependencies before adding
+            if (nodeDependencies[sourceId]) {
+                nodeDependencies[sourceId].outgoing.push(targetId);
+            }
+            
+            if (nodeDependencies[targetId]) {
+                nodeDependencies[targetId].incoming.push(sourceId);
+            }
         });
     
         // Find the starting nodes (nodes with no incoming edges)
-        const startingNodes = nodes.filter(node => nodeDependencies[node.id].incoming.length === 0);
+        const startingNodes = nodes.filter(node => 
+            nodeDependencies[node.id] && nodeDependencies[node.id].incoming.length === 0
+        );
     
         // Perform a breadth-first search to determine node positions
         const queue = [...startingNodes];
@@ -462,11 +541,19 @@ const SupplyChain = () => {
     
         while (queue.length > 0) {
             const currentNode = queue.shift();
+            if (!currentNode) continue;
+            
             nodePositions[currentNode.id] = position++;
     
-            nodeDependencies[currentNode.id].outgoing.forEach(targetNodeId => {
-                queue.push(nodes.find(node => node.id === targetNodeId));
-            });
+            // Check if the node and its dependencies exist before processing
+            if (nodeDependencies[currentNode.id]) {
+                nodeDependencies[currentNode.id].outgoing.forEach(targetNodeId => {
+                    const targetNode = nodes.find(node => String(node.id) === String(targetNodeId));
+                    if (targetNode) {
+                        queue.push(targetNode);
+                    }
+                });
+            }
         }
     
         return nodePositions;
@@ -478,66 +565,60 @@ const SupplyChain = () => {
             alert("All nodes must be connected with edges before saving.");
             return;
         }
-    
+
+        // Show loading overlay
+        setIsSaving(true);
+
         try {
-            // 🔄 Fetch the latest nodes from the backend before saving
-            const latestNodesResponse = await fetch(`http://localhost:8080/api/supply-chains/${id}/nodes`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
-                    "Content-Type": "application/json"
-                }
-            });
-    
-            const latestNodes = await latestNodesResponse.json();
-    
-            // 🔄 Fetch the latest edges from the backend (optional, but keeps consistency)
-            const latestEdgesResponse = await fetch(`http://localhost:8080/api/supply-chains/${id}/edges`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
-                    "Content-Type": "application/json"
-                }
-            });
-    
-            const latestEdges = await latestEdgesResponse.json();
-    
-            // Update the entire supply chain with the latest node & edge data
+            // Fetch the latest nodes from the backend
+            const latestNodes = await getNodes(id);
+
+            // Map nodes directly from the fetched data
+            const formattedNodes = latestNodes.map(node => ({
+                id: parseInt(node.id),
+                name: node.name,
+                role: node.role,
+                x: node.x,
+                y: node.y,
+                status: node.status,
+                assignedUserId: node.assignedUserId ? parseInt(node.assignedUserId) : null // Ensure assignedUserId is set correctly
+            }));
+
+            // Format edges
+            const formattedEdges = edges.map(edge => ({
+                id: parseInt(edge.id),
+                source: {
+                    id: parseInt(edge.source)
+                },
+                target: {
+                    id: parseInt(edge.target)
+                },
+                animated: edge.animated || true,
+                strokeColor: edge.style?.stroke || "#778DA9",
+                strokeWidth: edge.style?.strokeWidth || 2
+            }));
+
+            // Create the update payload
             const updatedSupplyChain = {
                 id: supplyChain.id,
                 name: supplyChain.name,
                 description: supplyChain.description,
-                updatedAt: new Date().toISOString(),
-                nodes: latestNodes.map((node) => ({
-                    id: node.id,
-                    name: node.name,
-                    role: node.role,
-                    assignedUser: node.assignedUser,
-                    status: node.status,
-                    x: node.x,
-                    y: node.y,
-                })),
-                edges: latestEdges.map((edge) => ({
-                    id: edge.id,
-                    source: edge.source,
-                    target: edge.target,
-                    sourceHandle: edge.sourceHandle,
-                    targetHandle: edge.targetHandle,
-                    animated: edge.animated,
-                })),
+                nodes: formattedNodes,
+                edges: formattedEdges
             };
-    
-            // ✅ Send the updated supply chain to the backend
-            const response = await updateSupplyChain(id, updatedSupplyChain);
-    
-            // Update the state to reflect the saved changes
-            setSupplyChain((prev) => ({
-                ...prev,
-                updatedAt: response.updatedAt
-            }));
-    
-            setIsEditMode(false);
-            alert("✅ Supply chain updated successfully!");
+
+            // Send the update to the backend
+            await updateSupplyChain(id, updatedSupplyChain);
+            
+            // Show loading for at least 500ms
+            setTimeout(() => {
+                // Refresh the page
+                window.location.reload();
+            }, 500);
         } catch (error) {
             console.error("❌ Error updating supply chain:", error);
+            setIsSaving(false);
+            alert("Failed to save supply chain. Please try again.");
         }
     };
 
@@ -597,6 +678,12 @@ const SupplyChain = () => {
                                     {key}
                                 </div>
                             ))}
+                            {/* Explanatory Text Box */}
+                            <div className="mt-4 p-3 bg-gray-700 text-gray-400 rounded-lg italic">
+                                <p className="text-sm">
+                                    Drag and drop the nodes onto the canvas to create your supply chain. Connect the nodes by dragging from one node's handle to another node's handle.
+                                </p>
+                            </div>
                         </div>
                     )}
 
@@ -656,10 +743,11 @@ const SupplyChain = () => {
                             onEdgesChange={isEditMode ? onEdgesChange : undefined}
                             onConnect={isEditMode ? onConnect : undefined}
                             onEdgeClick={isEditMode ? onEdgeClick : undefined}
+                            onNodeClick={isEditMode ? onNodeClick : undefined}
                             nodeTypes={nodeTypes}
                             nodesDraggable={false} // Disable global dragging
                             onNodeDragStop={onNodeDragStop}
-                            defaultViewport={{ x: 0, y: 0, zoom: 1 }} // Set your initial viewport settings
+                            defaultViewport={config.APP.DEFAULT_VIEWPORT} // Use config setting
                         >
                             <MiniMap />
                             <Controls />
@@ -669,59 +757,7 @@ const SupplyChain = () => {
                     </div>
                 </div>
             </div>
-
-            {isModalOpen && (
-                <div
-                    className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
-                    onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
-                >
-                    <div className="bg-[#1B263B] p-6 rounded-lg shadow-md w-96">
-                        <h2 className="text-xl font-semibold mb-4 text-[#E0E1DD]">Edit Node</h2>
-                        <input
-                            type="text"
-                            placeholder="Node Name"
-                            value={selectedNode?.data?.name || ''}
-                            onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, name: e.target.value } })}
-                            className="w-full p-2 mb-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Role"
-                            value={selectedNode?.data?.role || ''}
-                            onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, role: e.target.value } })}
-                            className="w-full p-2 mb-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Assigned User"
-                            value={selectedNode?.data?.assignedUser || ''}
-                            onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, assignedUser: e.target.value } })}
-                            className="w-full p-2 mb-4 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
-                        />
-                        <select
-                            value={selectedNode?.data?.status || "pending"}
-                            onChange={(e) => setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, status: e.target.value } })}
-                            className="w-full p-2 mb-4 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
-                        >
-                            <option value="pending">Pending</option>
-                            <option value="processing">Processing</option>
-                            <option value="done">Done</option>
-                        </select>
-                        <span className={getStatusColor(selectedNode?.data?.status)}>
-                            {selectedNode?.data?.status}
-                        </span>
-                        <button
-                            onClick={handleSaveNode}
-                            className="bg-green-500 px-4 py-2 rounded text-white mr-2"
-                        >
-                            Save
-                        </button>
-                        <button onClick={() => setIsModalOpen(false)} className="bg-red-500 px-4 py-2 rounded text-white">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
+            {isSaving && <LoadingOverlay message="Saving supply chain..." />}
         </div>
     );
 };
