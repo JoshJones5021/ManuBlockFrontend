@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+    getMaterialsBySupplier, 
+    getPendingRequests, 
+    getTransportsForSource,
+    createMaterial,
+    approveRequest,
+    allocateMaterials
+} from '../services/supplyChainApi';
 import Navbar from '../components/navbar/NavBar';
 import Sidebar from '../components/sidebar/Sidebar';
 import Pagination from '../components/Pagination';
 import MaterialRequestReviewModal from '../components/modals/MaterialRequestReviewModal';
-import axios from 'axios';
 
 const SupplierDashboard = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -46,28 +53,16 @@ const SupplierDashboard = () => {
         setLoading(true);
         try {
             // Fetch supplier's materials
-            const materialsResponse = await axios.get(`http://localhost:8080/api/supplier/materials/${supplierId}`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                }
-            });
-            setMaterials(materialsResponse.data);
-
+            const materialsData = await getMaterialsBySupplier(supplierId);
+            setMaterials(materialsData);
+    
             // Fetch pending material requests
-            const requestsResponse = await axios.get(`http://localhost:8080/api/supplier/requests/pending/${supplierId}`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                }
-            });
-            setRequests(requestsResponse.data);
-
+            const requestsData = await getPendingRequests(supplierId);
+            setRequests(requestsData);
+    
             // Fetch recent transfers
-            const transfersResponse = await axios.get(`http://localhost:8080/api/distributor/transports/source/${supplierId}`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                }
-            });
-            setTransfers(transfersResponse.data);
+            const transfersData = await getTransportsForSource(supplierId);
+            setTransfers(transfersData);
         } catch (error) {
             console.error('Error fetching supplier data:', error);
         } finally {
@@ -77,47 +72,26 @@ const SupplierDashboard = () => {
 
     const handleCreateMaterial = async () => {
         try {
-            // Validate form
-            if (!newMaterial.name || !newMaterial.description || newMaterial.quantity <= 0) {
-                alert('Please fill all required fields with valid values.');
-                return;
-            }
-
-            const response = await axios.post('http://localhost:8080/api/supplier/materials', {
+            // Validate form...
+            const materialData = {
                 ...newMaterial,
                 supplierId,
                 supplyChainId: 1, // This should be selected or determined dynamically
-            }, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            // Update materials list
-            setMaterials([...materials, response.data]);
+            };
+            
+            const createdMaterial = await createMaterial(materialData);
+            setMaterials([...materials, createdMaterial]);
             setIsModalOpen(false);
-            setNewMaterial({
-                name: '',
-                description: '',
-                quantity: 0,
-                unit: 'units',
-                specifications: '',
-            });
+            // Reset form...
         } catch (error) {
             console.error('Error creating material:', error);
-            alert('Failed to create material. Please try again.');
+            alert("Failed to create material. Please try again.");
         }
     };
 
     const handleApproveRequest = async (requestId, approvals) => {
         try {
-            await axios.post(`http://localhost:8080/api/supplier/requests/${requestId}/approve`, approvals, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json',
-                }
-            });
+            await approveRequest(requestId, approvals);
 
             // Update requests list
             const updatedRequests = requests.map(req => 
@@ -132,12 +106,7 @@ const SupplierDashboard = () => {
 
     const handleAllocateMaterials = async (requestId) => {
         try {
-            await axios.post(`http://localhost:8080/api/supplier/requests/${requestId}/allocate`, {}, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json',
-                }
-            });
+            await allocateMaterials(requestId);
 
             // Update requests list
             const updatedRequests = requests.map(req => 
