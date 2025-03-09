@@ -436,3 +436,17 @@ export const getBlockchainItemDetails = async (itemId) => {
         throw new Error(errorMessage);
     }
 };
+
+export const getSupplyChainsByUserId = async (userId) => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/user/${userId}`, {
+            headers: {
+                Authorization: `Bearer ${localStorage.getItem(config.AUTH.TOKEN_KEY)}`,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        const errorMessage = handleApiError(error, 'Error fetching supply chains for user');
+        throw new Error(errorMessage);
+    }
+};

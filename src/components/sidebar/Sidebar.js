@@ -1,11 +1,15 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import manublock from '../../assets/manublock.png';
 import dashboardIcon from '../../assets/dashboard.png';
 import accountIcon from '../../assets/account.png';
 import settingsIcon from '../../assets/settings.png';
-import { Link } from 'react-router-dom';
+import usersIcon from '../../assets/users.png'; // Add a new icon for User Management
+import config from '../common/config';
 
 const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
+    const userRole = localStorage.getItem(config.AUTH.ROLE_KEY);
+
     return (
         <div
             className={`flex h-screen ${
@@ -23,39 +27,52 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
 
                 {/* Sidebar Menu Items */}
                 <ul className="space-y-6">
-                    <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
-                        <img src={dashboardIcon} alt="Dashboard" className="h-6 w-6" />
-                        <Link
-                            to="/dashboard"
-                            className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                    <Link to="/dashboard" className="block">
+                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                            <img src={dashboardIcon} alt="Dashboard" className="h-6 w-6" />
+                            <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                 isSidebarOpen ? 'opacity-100' : 'opacity-0'
-                            }`}
-                        >
-                            Dashboard
-                        </Link>
-                    </li>
-                    <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
-                        <img src={accountIcon} alt="Profile" className="h-6 w-6" />
-                        <Link
-                            to="/profile"
-                            className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                            }`}>
+                                Dashboard
+                            </span>
+                        </li>
+                    </Link>
+
+                    <Link to="/profile" className="block">
+                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                            <img src={accountIcon} alt="Profile" className="h-6 w-6" />
+                            <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                 isSidebarOpen ? 'opacity-100' : 'opacity-0'
-                            }`}
-                        >
-                            Profile
-                        </Link>
-                    </li>
-                    <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
-                        <img src={settingsIcon} alt="Settings" className="h-6 w-6" />
-                        <Link
-                            to="/settings"
-                            className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                            }`}>
+                                Profile
+                            </span>
+                        </li>
+                    </Link>
+
+                    <Link to="/settings" className="block">
+                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                            <img src={settingsIcon} alt="Settings" className="h-6 w-6" />
+                            <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                 isSidebarOpen ? 'opacity-100' : 'opacity-0'
-                            }`}
-                        >
-                            Settings
+                            }`}>
+                                Settings
+                            </span>
+                        </li>
+                    </Link>
+
+                    {/* Show User Management only for Admins */}
+                    {userRole === 'ADMIN' && (
+                        <Link to="/user-management" className="block">
+                            <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                                <img src={usersIcon} alt="User Management" className="h-6 w-6" />
+                                <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                                    isSidebarOpen ? 'opacity-100' : 'opacity-0'
+                                }`}>
+                                    User Management
+                                </span>
+                            </li>
                         </Link>
-                    </li>
+                    )}
                 </ul>
             </div>
 

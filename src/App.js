@@ -8,7 +8,14 @@ import SupplyChain from './pages/SupplyChain';
 import SupplierDashboard from './pages/SupplierDashboard';
 import MaterialDetail from './pages/MaterialDetail';
 import TransferDetail from './pages/TransferDetail';
+import UserManagement from './pages/UserManagement';
 import ProtectedRoute from './components/ProtectedRoute';
+
+// New: Admin Protected Route
+const AdminRoute = ({ children }) => {
+    const userRole = localStorage.getItem('role');
+    return userRole === 'ADMIN' ? children : <Navigate to="/dashboard" replace />;
+};
 
 function App() {
     return (
@@ -27,7 +34,7 @@ function App() {
                         <RoleBasedDashboard />
                     </ProtectedRoute>
                 } />
-                
+
                 {/* Supplier Routes */}
                 <Route path="/supplier-dashboard" element={
                     <ProtectedRoute>
@@ -44,12 +51,20 @@ function App() {
                         <TransferDetail />
                     </ProtectedRoute>
                 } />
-                
+
                 <Route path="/supply-chain/:id" element={
                     <ProtectedRoute>
                         <ReactFlowProvider>
                             <SupplyChain />
                         </ReactFlowProvider>
+                    </ProtectedRoute>
+                } />
+                
+                <Route path="/user-management" element={
+                    <ProtectedRoute>
+                        <AdminRoute>
+                            <UserManagement />
+                        </AdminRoute>
                     </ProtectedRoute>
                 } />
             </Routes>
@@ -64,16 +79,12 @@ function RoleBasedDashboard() {
     if (userRole === 'SUPPLIER') {
         return <Navigate to="/supplier-dashboard" replace />;
     } else if (userRole === 'MANUFACTURER') {
-        // Will redirect to manufacturer dashboard when implemented
         return <Dashboard />;
     } else if (userRole === 'DISTRIBUTOR') {
-        // Will redirect to distributor dashboard when implemented
         return <Dashboard />;
     } else if (userRole === 'CUSTOMER') {
-        // Will redirect to customer dashboard when implemented
         return <Dashboard />;
     } else {
-        // Admin or any other role
         return <Dashboard />;
     }
 }
