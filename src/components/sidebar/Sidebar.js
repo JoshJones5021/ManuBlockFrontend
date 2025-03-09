@@ -1,14 +1,17 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import manublock from '../../assets/manublock.png';
 import dashboardIcon from '../../assets/dashboard.png';
 import accountIcon from '../../assets/account.png';
 import settingsIcon from '../../assets/settings.png';
-import usersIcon from '../../assets/users.png'; // Add a new icon for User Management
+import usersIcon from '../../assets/users.png';
+import transfersIcon from '../../assets/transfers.png'; // Add a new icon for Transfers
 import config from '../common/config';
 
 const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
     const userRole = localStorage.getItem(config.AUTH.ROLE_KEY);
+    const location = useLocation();
+    const currentPath = location.pathname;
 
     return (
         <div
@@ -27,19 +30,47 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
 
                 {/* Sidebar Menu Items */}
                 <ul className="space-y-6">
-                    <Link to="/dashboard" className="block">
-                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
-                            <img src={dashboardIcon} alt="Dashboard" className="h-6 w-6" />
-                            <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
-                                isSidebarOpen ? 'opacity-100' : 'opacity-0'
-                            }`}>
-                                Dashboard
-                            </span>
-                        </li>
-                    </Link>
+                    {userRole === 'ADMIN' && (
+                        <Link to="/dashboard" className="block">
+                            <li className={`flex items-center ${currentPath === '/dashboard' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
+                                <img src={dashboardIcon} alt="Dashboard" className="h-6 w-6" />
+                                <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                                    isSidebarOpen ? 'opacity-100' : 'opacity-0'
+                                }`}>
+                                    Dashboard
+                                </span>
+                            </li>
+                        </Link>
+                    )}
+
+                    {userRole === 'SUPPLIER' && (
+                        <Link to="/supplier-dashboard" className="block">
+                            <li className={`flex items-center ${currentPath === '/supplier-dashboard' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
+                                <img src={dashboardIcon} alt="Supplier Dashboard" className="h-6 w-6" />
+                                <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                                    isSidebarOpen ? 'opacity-100' : 'opacity-0'
+                                }`}>
+                                    Dashboard
+                                </span>
+                            </li>
+                        </Link>
+                    )}
+
+                    {userRole === 'DISTRIBUTOR' && (
+                        <Link to="/distributor-dashboard" className="block">
+                            <li className={`flex items-center ${currentPath === '/distributor-dashboard' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
+                                <img src={transfersIcon || dashboardIcon} alt="Distributor Dashboard" className="h-6 w-6" />
+                                <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                                    isSidebarOpen ? 'opacity-100' : 'opacity-0'
+                                }`}>
+                                    Dashboard
+                                </span>
+                            </li>
+                        </Link>
+                    )}
 
                     <Link to="/profile" className="block">
-                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                        <li className={`flex items-center ${currentPath === '/profile' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
                             <img src={accountIcon} alt="Profile" className="h-6 w-6" />
                             <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                 isSidebarOpen ? 'opacity-100' : 'opacity-0'
@@ -50,7 +81,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                     </Link>
 
                     <Link to="/settings" className="block">
-                        <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                        <li className={`flex items-center ${currentPath === '/settings' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
                             <img src={settingsIcon} alt="Settings" className="h-6 w-6" />
                             <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                 isSidebarOpen ? 'opacity-100' : 'opacity-0'
@@ -63,7 +94,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                     {/* Show User Management only for Admins */}
                     {userRole === 'ADMIN' && (
                         <Link to="/user-management" className="block">
-                            <li className="flex items-center hover:bg-[#415A77] p-2 rounded cursor-pointer">
+                            <li className={`flex items-center ${currentPath === '/user-management' ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
                                 <img src={usersIcon} alt="User Management" className="h-6 w-6" />
                                 <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                     isSidebarOpen ? 'opacity-100' : 'opacity-0'

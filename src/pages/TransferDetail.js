@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/navbar/NavBar';
 import Sidebar from '../components/sidebar/Sidebar';
-import axios from 'axios';
+import { getTransferById, getBlockchainTransaction } from '../services/transferApi';
+import config from '../components/common/config';
 
 const TransferDetail = () => {
     const { transferId } = useParams();
@@ -12,50 +13,49 @@ const TransferDetail = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [userRole, setUserRole] = useState('');
 
     useEffect(() => {
         const fetchTransferDetails = async () => {
             try {
                 setLoading(true);
                 
-                // Fetch transfer details
-                const response = await axios.get(`http://localhost:8080/api/distributor/transport/${transferId}`, {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
+                // Get user role for "back" button navigation
+                const role = localStorage.getItem(config.AUTH.ROLE_KEY);
+                setUserRole(role);
                 
-                const transferData = response.data;
+                // Fetch transfer details using service
+                const transferData = await getTransferById(transferId);
                 setTransfer(transferData);
                 
                 // If there's a blockchain transaction hash, fetch details
-                if (transferData.blockchainTxHash) {
+                if (transferData.blockchainTxHash && transferData.blockchainItemId) {
                     try {
-                        const blockchainResponse = await axios.get(
-                            `http://localhost:8080/api/tracing/blockchain/transaction/${transferData.blockchainItemId}`, 
-                            {
-                                headers: {
-                                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                                }
-                            }
-                        );
-                        setBlockchainTransaction(blockchainResponse.data);
+                        const blockchainData = await getBlockchainTransaction(transferData.blockchainItemId);
+                        setBlockchainTransaction(blockchainData);
                     } catch (err) {
                         console.error('Error fetching blockchain transaction:', err);
                         // Continue without blockchain data
                     }
                 }
-                
-                setLoading(false);
             } catch (err) {
                 console.error('Error fetching transfer details:', err);
                 setError('Failed to load transfer details. Please try again later.');
+            } finally {
                 setLoading(false);
             }
         };
         
         fetchTransferDetails();
     }, [transferId]);
+
+    // Get correct dashboard URL based on user role
+    const getDashboardUrl = () => {
+        if (userRole === 'SUPPLIER') return '/supplier-dashboard';
+        if (userRole === 'DISTRIBUTOR') return '/distributor-dashboard';
+        if (userRole === 'MANUFACTURER') return '/manufacturer-dashboard';
+        return '/dashboard';
+    };
 
     // Helper to format date with time
     const formatDateTime = (dateString) => {
@@ -102,7 +102,7 @@ const TransferDetail = () => {
                             <h3 className="text-xl font-bold mb-2">Error</h3>
                             <p>{error}</p>
                             <button 
-                                onClick={() => navigate('/supplier-dashboard')}
+                                onClick={() => navigate(getDashboardUrl())}
                                 className="mt-4 bg-[#415A77] text-white py-2 px-4 rounded"
                             >
                                 Return to Dashboard
@@ -124,7 +124,7 @@ const TransferDetail = () => {
                         <div className="text-center">
                             <h3 className="text-xl font-bold mb-2">Transfer Not Found</h3>
                             <button 
-                                onClick={() => navigate('/supplier-dashboard')}
+                                onClick={() => navigate(getDashboardUrl())}
                                 className="mt-4 bg-[#415A77] text-white py-2 px-4 rounded"
                             >
                                 Return to Dashboard
@@ -154,13 +154,14 @@ const TransferDetail = () => {
                             </div>
                         </div>
                         <button 
-                            onClick={() => navigate('/supplier-dashboard')}
+                            onClick={() => navigate(getDashboardUrl())}
                             className="bg-[#415A77] text-white py-2 px-4 rounded"
                         >
                             Back to Dashboard
                         </button>
                     </div>
                     
+                    {/* Rest of the component remains the same */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                         {/* Transfer Overview */}
                         <div className="lg:col-span-2 bg-[#1B263B] p-6 rounded-lg shadow">
