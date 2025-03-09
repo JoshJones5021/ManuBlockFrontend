@@ -26,11 +26,11 @@ const MaterialDetail = () => {
                 setLoading(true);
                 
                 // Fetch material details
-                const materialResponse = await axios.get(`http://localhost:8080/api/material/${materialId}`, {
+                const materialResponse = await axios.get(`http://localhost:8080/api/supplier/material/${materialId}`, {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`
                     }
-                });
+                });                
                 
                 const materialData = materialResponse.data;
                 setMaterial(materialData);

@@ -6,7 +6,8 @@ import {
     getTransportsForSource,
     createMaterial,
     approveRequest,
-    allocateMaterials
+    allocateMaterials,
+    getSupplyChainsByUserId
 } from '../services/supplyChainApi';
 import Navbar from '../components/navbar/NavBar';
 import Sidebar from '../components/sidebar/Sidebar';
@@ -19,6 +20,8 @@ const SupplierDashboard = () => {
     const [materials, setMaterials] = useState([]);
     const [requests, setRequests] = useState([]);
     const [transfers, setTransfers] = useState([]);
+    const [supplyChains, setSupplyChains] = useState([]);
+    const [selectedSupplyChain, setSelectedSupplyChain] = useState(null);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(8);
@@ -38,7 +41,6 @@ const SupplierDashboard = () => {
     const supplierId = localStorage.getItem('userId');
 
     useEffect(() => {
-        // Verify user is a supplier
         const userRole = localStorage.getItem('role');
         if (userRole !== 'SUPPLIER') {
             alert('Unauthorized access. Redirecting to dashboard.');
@@ -52,17 +54,22 @@ const SupplierDashboard = () => {
     const fetchSupplierData = async () => {
         setLoading(true);
         try {
-            // Fetch supplier's materials
             const materialsData = await getMaterialsBySupplier(supplierId);
             setMaterials(materialsData);
-    
-            // Fetch pending material requests
+
             const requestsData = await getPendingRequests(supplierId);
             setRequests(requestsData);
-    
-            // Fetch recent transfers
+
             const transfersData = await getTransportsForSource(supplierId);
             setTransfers(transfersData);
+
+            // ✅ Fetch supply chains the supplier is assigned to
+            const chains = await getSupplyChainsByUserId(supplierId);
+            setSupplyChains(chains);
+
+            if (chains.length > 0) {
+                setSelectedSupplyChain(chains[0].id); // ✅ Default to the first one
+            }
         } catch (error) {
             console.error('Error fetching supplier data:', error);
         } finally {
@@ -70,19 +77,32 @@ const SupplierDashboard = () => {
         }
     };
 
+    const handleViewDetails = (materialId) => {
+        console.log(`Navigating to /material/${materialId}`); // Debugging
+        if (!materialId) {
+            console.error("❌ Material ID is undefined!");
+            return;
+        }
+        navigate(`/material/${materialId}`);
+    };
+    
+
     const handleCreateMaterial = async () => {
         try {
-            // Validate form...
+            if (!selectedSupplyChain) {
+                alert('Please select a supply chain.');
+                return;
+            }
+
             const materialData = {
                 ...newMaterial,
                 supplierId,
-                supplyChainId: 1, // This should be selected or determined dynamically
+                supplyChainId: selectedSupplyChain, // ✅ Use selected supply chain
             };
-            
+
             const createdMaterial = await createMaterial(materialData);
             setMaterials([...materials, createdMaterial]);
             setIsModalOpen(false);
-            // Reset form...
         } catch (error) {
             console.error('Error creating material:', error);
             alert("Failed to create material. Please try again.");
@@ -230,12 +250,12 @@ const SupplierDashboard = () => {
                                                     </div>
                                                 </div>
                                                 <div className="mt-4 flex justify-end">
-                                                    <button 
-                                                        className="text-sm bg-[#415A77] text-white px-3 py-1 rounded hover:bg-[#778DA9]"
-                                                        onClick={() => {/* Navigate to material detail/edit page */}}
-                                                    >
-                                                        Details
-                                                    </button>
+                                                <button 
+                                                    className="text-sm bg-[#415A77] text-white px-3 py-1 rounded hover:bg-[#778DA9]"
+                                                    onClick={() => handleViewDetails(material.id)} // ✅ Delayed execution
+                                                >
+                                                    Details
+                                                </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -384,6 +404,21 @@ const SupplierDashboard = () => {
                     <div className="bg-[#1B263B] p-6 rounded-lg shadow-md w-96">
                         <h2 className="text-xl font-semibold mb-4 text-[#E0E1DD]">Add New Material</h2>
                         <div className="space-y-4">
+                             {/* ✅ Supply Chain Selector */}
+                             <div>
+                                <label className="block text-gray-400 mb-1">Select Supply Chain</label>
+                                <select
+                                    value={selectedSupplyChain}
+                                    onChange={(e) => setSelectedSupplyChain(e.target.value)}
+                                    className="w-full p-2 bg-[#0D1B2A] text-white rounded border border-[#415A77]"
+                                >
+                                    {supplyChains.map((chain) => (
+                                        <option key={chain.id} value={chain.id}>
+                                            {chain.name} (ID: {chain.id})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                             <input
                                 type="text"
                                 placeholder="Material Name"
