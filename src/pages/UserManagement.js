@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/navbar/NavBar';
 import Sidebar from '../components/sidebar/Sidebar';
 import Pagination from '../components/Pagination';
-import { getAllUsers, getAllRoles, deleteUser, updateUser, createUser } from '../services/userApi';
+import { getAllUsers, getAllRoles, deleteUser, updateUser, createUser, assignRole } from '../services/userApi';
 import config from '../components/common/config';
 import { getSupplyChainsByUserId } from '../services/supplyChainApi';
 import LoadingOverlay from '../components/LoadingOverlay';
@@ -141,12 +141,21 @@ const UserManagement = () => {
                 if (!updatedUserData.password) {
                     delete updatedUserData.password;
                 }
-                await updateUser(selectedUser.id, updatedUserData);
+    
+                // ✅ Check if role has changed, send request to assignRole instead
+                if (selectedUser.role !== updatedUserData.role) {
+                    await assignRole(selectedUser.id, updatedUserData.role);
+                }
+    
+                // ✅ If email is updated, update user
+                if (selectedUser.email !== updatedUserData.email) {
+                    await updateUser(selectedUser.id, { email: updatedUserData.email });
+                }
+    
                 alert('User updated successfully');
             }
     
             await fetchUsers(); // ✅ Refresh the users list
-    
             setIsModalOpen(false);
         } catch (error) {
             console.error('Error processing user data:', error);
@@ -155,7 +164,7 @@ const UserManagement = () => {
             setIsProcessing(false);
             setLoading(false);
         }
-    };    
+    };        
     
     // Handle user deletion
     const handleDeleteUser = async (userId) => {
