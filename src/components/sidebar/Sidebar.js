@@ -68,7 +68,7 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                                 <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
                                     isSidebarOpen ? 'opacity-100' : 'opacity-0'
                                 }`}>
-                                    User Management
+                                    Users
                                 </span>
                             </li>
                         </Link>
