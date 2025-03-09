@@ -47,9 +47,20 @@ const SupplierDashboard = () => {
             navigate('/dashboard');
             return;
         }
-
+    
+        // Get URL parameters
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        const materialParam = params.get('material');
+        
+        // Set active tab if specified
+        if (tabParam) {
+            setActiveTab(tabParam); // This should exactly match one of your tab IDs
+            console.log("Setting active tab to:", tabParam); // Debugging
+        }
+        
         fetchSupplierData();
-    }, []);
+    }, [window.location.search]);
 
     const fetchSupplierData = async () => {
         setLoading(true);
@@ -173,6 +184,53 @@ const SupplierDashboard = () => {
                         </div>
                     </div>
 
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-[#1B263B] p-4 rounded-lg shadow">
+                        <h3 className="text-gray-400 mb-1">Total Materials</h3>
+                        <p className="text-2xl font-semibold">{materials.length}</p>
+                        <div className="flex justify-between mt-2 text-sm">
+                            <span>Active: {materials.filter(m => m.active).length}</span>
+                            <span>Inactive: {materials.filter(m => !m.active).length}</span>
+                        </div>
+                        </div>
+                        
+                        <div className="bg-[#1B263B] p-4 rounded-lg shadow">
+                        <h3 className="text-gray-400 mb-1">Pending Requests</h3>
+                        <p className="text-2xl font-semibold">{requests.filter(r => r.status === 'Requested').length}</p>
+                        <div className="flex justify-between mt-2 text-sm">
+                            <span>Approved: {requests.filter(r => r.status === 'Approved').length}</span>
+                            <span>Allocated: {requests.filter(r => r.status === 'Allocated').length}</span>
+                        </div>
+                        </div>
+                        
+                        <div className="bg-[#1B263B] p-4 rounded-lg shadow">
+                        <h3 className="text-gray-400 mb-1">Active Transfers</h3>
+                        <p className="text-2xl font-semibold">{transfers.filter(t => t.status === 'Scheduled' || t.status === 'In Transit').length}</p>
+                        <div className="flex justify-between mt-2 text-sm">
+                            <span>Scheduled: {transfers.filter(t => t.status === 'Scheduled').length}</span>
+                            <span>In Transit: {transfers.filter(t => t.status === 'In Transit').length}</span>
+                        </div>
+                        </div>
+                        
+                        <div className="bg-[#1B263B] p-4 rounded-lg shadow">
+                        <h3 className="text-gray-400 mb-1">Total Inventory</h3>
+                        <p className="text-2xl font-semibold">
+                            {materials.reduce((sum, mat) => sum + mat.quantity, 0).toLocaleString()} units
+                        </p>
+                        <div className="w-full bg-gray-700 h-2 rounded-full mt-2">
+                            <div 
+                            className="bg-blue-500 h-2 rounded-full"
+                            style={{
+                                width: `${Math.min(100, 
+                                (materials.reduce((sum, mat) => sum + mat.quantity, 0) / 10000) * 100
+                                )}%`
+                            }}
+                            ></div>
+                        </div>
+                        </div>
+                    </div>
+
                     {/* Tab Navigation */}
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex space-x-4">
@@ -233,31 +291,51 @@ const SupplierDashboard = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                         {currentItems.map((material) => (
                                             <div key={material.id} className="bg-[#0D1B2A] p-5 rounded-lg shadow-md border border-[#415A77]">
+                                                <div className="flex justify-between">
                                                 <h3 className="text-lg font-semibold">{material.name}</h3>
+                                                {material.blockchainItemId && (
+                                                    <span className="px-2 text-xs bg-blue-900 text-blue-300 rounded-full flex items-center">
+                                                    On-Chain
+                                                    </span>
+                                                )}
+                                                </div>
                                                 <p className="text-gray-400 text-sm mt-1">{material.description}</p>
                                                 <div className="mt-3 bg-[#1B263B] p-3 rounded-md">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-gray-400">Quantity:</span>
-                                                        <span className="font-medium">{material.quantity} {material.unit}</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center mt-2">
-                                                        <span className="text-gray-400">Status:</span>
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                            material.active ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-                                                        }`}>
-                                                            {material.active ? 'Active' : 'Inactive'}
-                                                        </span>
-                                                    </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-gray-400">Quantity:</span>
+                                                    <span className="font-medium">{material.quantity} {material.unit}</span>
+                                                </div>
+                                                {/* Add inventory gauge */}
+                                                <div className="mt-1 w-full bg-gray-700 h-2 rounded-full">
+                                                    <div 
+                                                    className={`h-2 rounded-full ${
+                                                        material.quantity > 1000 ? 'bg-green-500' : 
+                                                        material.quantity > 500 ? 'bg-yellow-500' : 'bg-red-500'
+                                                    }`}
+                                                    style={{width: `${Math.min(100, (material.quantity / 1000) * 100)}%`}}
+                                                    ></div>
+                                                </div>
+                                                <div className="flex justify-between items-center mt-2">
+                                                    <span className="text-gray-400">Status:</span>
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                    material.active ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+                                                    }`}>
+                                                    {material.active ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </div>
+                                                </div>
+                                                <div className="mt-2 text-gray-400 text-xs">
+                                                Updated: {new Date(material.updatedAt).toLocaleString()}
                                                 </div>
                                                 <div className="mt-4 flex justify-end">
                                                 <button 
                                                     className="text-sm bg-[#415A77] text-white px-3 py-1 rounded hover:bg-[#778DA9]"
-                                                    onClick={() => handleViewDetails(material.id)} // ✅ Delayed execution
+                                                    onClick={() => handleViewDetails(material.id)}
                                                 >
                                                     Details
                                                 </button>
-                                                </div>
                                             </div>
+                                          </div>
                                         ))}
                                     </div>
                                 )}
