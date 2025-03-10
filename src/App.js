@@ -7,6 +7,7 @@ import Profile from './pages/Profile';
 import SupplyChain from './pages/SupplyChain';
 import SupplierDashboard from './pages/SupplierDashboard';
 import DistributorDashboard from './pages/DistributorDashboard';
+import ManufacturerDashboard from './pages/ManufacturerDashboard';
 import MaterialDetail from './pages/MaterialDetail';
 import TransferDetail from './pages/TransferDetail';
 import UserManagement from './pages/UserManagement';
@@ -76,6 +77,14 @@ function App() {
                         </AdminRoute>
                     </ProtectedRoute>
                 } />
+                {/* Manufacturer Routes */}
+                <Route path="/manufacturer-dashboard" element={
+                    <ProtectedRoute>
+                        <ReactFlowProvider>
+                            <ManufacturerDashboard />
+                        </ReactFlowProvider>
+                    </ProtectedRoute>
+                } />
             </Routes>
         </Router>
     );
@@ -90,7 +99,7 @@ function RoleBasedDashboard() {
     } else if (userRole === 'DISTRIBUTOR') {
         return <Navigate to="/distributor-dashboard" replace />;
     } else if (userRole === 'MANUFACTURER') {
-        return <Dashboard />;
+        return <Navigate to="/manufacturer-dashboard" replace />;
     } else if (userRole === 'CUSTOMER') {
         return <Dashboard />;
     } else {
