@@ -8,9 +8,11 @@ import SupplyChain from './pages/SupplyChain';
 import SupplierDashboard from './pages/SupplierDashboard';
 import DistributorDashboard from './pages/DistributorDashboard';
 import ManufacturerDashboard from './pages/ManufacturerDashboard';
+import CustomerDashboard from './pages/CustomerDashboard';
 import MaterialDetail from './pages/MaterialDetail';
 import TransferDetail from './pages/TransferDetail';
 import UserManagement from './pages/UserManagement';
+import OrderDetail from './pages/OrderDetail';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // New: Admin Protected Route
@@ -34,6 +36,18 @@ function App() {
                 <Route path="/dashboard" element={
                     <ProtectedRoute>
                         <RoleBasedDashboard />
+                    </ProtectedRoute>
+                } />
+
+                {/* Customer Routes */}
+                <Route path="/customer-dashboard" element={
+                    <ProtectedRoute>
+                        <CustomerDashboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="/order/:orderId" element={
+                    <ProtectedRoute>
+                        <OrderDetail />
                     </ProtectedRoute>
                 } />
 
@@ -101,7 +115,7 @@ function RoleBasedDashboard() {
     } else if (userRole === 'MANUFACTURER') {
         return <Navigate to="/manufacturer-dashboard" replace />;
     } else if (userRole === 'CUSTOMER') {
-        return <Dashboard />;
+        return <Navigate to="/customer-dashboard" replace />;
     } else {
         return <Dashboard />;
     }

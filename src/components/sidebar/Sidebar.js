@@ -7,6 +7,7 @@ import settingsIcon from '../../assets/settings.png';
 import usersIcon from '../../assets/users.png';
 import transfersIcon from '../../assets/transfers.png';
 import factoryIcon from '../../assets/factory.png';
+import ordersIcon from '../../assets/orders.png';
 import config from '../common/config';
 
 const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
@@ -81,6 +82,21 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                                 </span>
                             </li>
                         </Link>
+                    )}
+
+                    {userRole === 'CUSTOMER' && (
+                        <>
+                            <Link to="/customer-dashboard?tab=orders" className="block">
+                                <li className={`flex items-center ${currentPath.includes('/order') || location.search.includes('tab=orders') ? 'bg-[#415A77]' : 'hover:bg-[#415A77]'} p-2 rounded cursor-pointer`}>
+                                    <img src={ordersIcon} alt="My Orders" className="h-6 w-6" />
+                                    <span className={`text-[#E0E1DD] ml-4 transition-opacity duration-200 ${
+                                        isSidebarOpen ? 'opacity-100' : 'opacity-0'
+                                    }`}>
+                                        Orders
+                                    </span>
+                                </li>
+                            </Link>
+                        </>
                     )}
 
                     <Link to="/profile" className="block">
